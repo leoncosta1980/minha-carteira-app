@@ -206,14 +206,22 @@ const b64enc=s=>btoa(unescape(encodeURIComponent(s)));
 async function ghGet(path){const r=await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}?t=${Date.now()}`,{headers:ghH()});if(!r.ok)return null;const j=await r.json();return{text:b64dec(j.content),sha:j.sha}}
 async function ghPut(path,text,msg){const cur=await ghGet(path);const body={message:msg,content:b64enc(text)};if(cur)body.sha=cur.sha;const r=await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`,{method:'PUT',headers:{...ghH(),'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(`GitHub recusou (HTTP ${r.status}) ${j.message||''}`)}}
 
+const NIVEIS=['range=3mo&interval=1d&fundamental=true&dividends=true','range=3mo&interval=1d',''];
+let qlvl={};try{qlvl=JSON.parse(localStorage.getItem('mc_qlvl')||'{}')}catch(e){}
+
 async function quote(t){
   const tok=cfg.brapi?`token=${cfg.brapi}`:'';
-  for(const p of['range=3mo&interval=1d&fundamental=true&dividends=true','range=3mo&interval=1d','']){
-    try{const q=[p,tok].filter(Boolean).join('&');
+  // Comeca do nivel que funcionou da ultima vez (evita 403 repetidos no console)
+  const inicio=qlvl[t]||0;
+  for(let i=inicio;i<NIVEIS.length;i++){
+    try{const q=[NIVEIS[i],tok].filter(Boolean).join('&');
       const r=await fetch(`https://brapi.dev/api/quote/${t}${q?'?'+q:''}`);
       if(!r.ok)continue;
       const res=(await r.json()).results[0];
-      if(res&&res.regularMarketPrice)return res;
+      if(res&&res.regularMarketPrice){
+        if(qlvl[t]!==i){qlvl[t]=i;localStorage.setItem('mc_qlvl',JSON.stringify(qlvl))}
+        return res;
+      }
     }catch(e){}
   }
   return null;
@@ -674,10 +682,12 @@ async function exportarPDF(){
   doc.text('Gerado pelo app Minha Carteira · Cotações com ~15 min de atraso · Não é recomendação de investimento.',14,287);
 
   const nome=`carteira-${new Date().toISOString().slice(0,10)}.pdf`;
-  const blob=doc.output('blob');
-  const file=new File([blob],nome,{type:'application/pdf'});
-  if(navigator.canShare&&navigator.canShare({files:[file]})){
-    try{await navigator.share({files:[file],title:'Minha Carteira'});return}catch(e){}
+  const mobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+  if(mobile){
+    const file=new File([doc.output('blob')],nome,{type:'application/pdf'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:'Minha Carteira'});return}catch(e){}
+    }
   }
   doc.save(nome);
   toast('PDF salvo nos downloads');

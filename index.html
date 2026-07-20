@@ -73,6 +73,14 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
 .afill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--mint);transition:width .5s ease}
 .afill.low{background:#EF9F27}
 .amark{position:absolute;top:-3px;bottom:-3px;width:2px;background:#E8F2ED;opacity:.8;border-radius:1px}
+.mgrid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.mgrid3 .mcard{padding:10px 12px}
+.mgrid3 .v{font-size:1.05rem}
+.rc{display:flex;gap:7px;align-items:stretch;height:130px;margin:16px 2px 2px}
+.rcol{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:4px}
+.rbar{width:100%;max-width:36px;background:var(--mint);border-radius:6px 6px 2px 2px;transition:height .5s ease}
+.rcol .rv{font-size:.62rem;color:var(--tx)}
+.rcol .rm{font-size:.66rem;color:var(--mut);text-transform:uppercase}
 </style>
 </head>
 <body>
@@ -106,6 +114,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div id="warns"></div>
   <div class="mgrid" id="metrics"></div>
   <div id="alerts"></div>
+  <div id="renda"></div>
   <div class="chart-box hide" id="hist-box"><div class="gt" style="margin:0 0 6px"><b>Evolução do patrimônio</b></div><canvas id="ch-hist" height="150"></canvas></div>
   <h2>Alocação: atual × meta</h2>
   <div id="aloc"></div>
@@ -137,7 +146,7 @@ window.onerror=function(msg,src,line){
 const $=id=>document.getElementById(id);
 const LSK='mc_cfg';
 let cfg=JSON.parse(localStorage.getItem(LSK)||'{}');
-let carteira=null,quotes={},hist=null,noticias=null,indic=null,charts={};
+let carteira=null,quotes={},hist=null,noticias=null,indic=null,prov=null,charts={};
 
 const brl=(v,d=0)=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
 const num2=v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -230,7 +239,7 @@ function render(an,falhas){
     ?`<div class="al plan"><div class="h">Próximo aporte — nesta ordem</div><ul>${an.reb.map((r,i)=>`<li>${i+1}º <b>${r.t}</b>: compre ~${brl(r.ap)} (está em ${pct(r.pc)}, meta ${pct(r.meta,0)})</li>`).join('')}</ul></div>`
     :`<div class="al plan"><div class="h">Alocação</div>Carteira dentro das metas. Nenhuma compra necessária hoje.</div>`;
   $('alerts').innerHTML=al;
-  renderAssets(an);renderCharts(an);renderNews();renderEdit();
+  renderAssets(an);renderRenda();renderCharts(an);renderNews();renderEdit();
 }
 
 function renderAssets(an){
@@ -249,6 +258,36 @@ function renderAssets(an){
   for(const rf of carteira.renda_fixa)h+=`<tr><td>${rf.nome}</td><td>${brl(rf.valor,2)}</td><td>${pct(rf.meta_pct,0)}</td><td>${pct(rf.valor/an.patr)}</td></tr>`;
   h+='</table></div>';
   $('assets').innerHTML=h;
+}
+
+function renderRenda(){
+  if(!prov||!prov.eventos||!prov.eventos.length){$('renda').innerHTML='';return}
+  const ev=prov.eventos,ano=String(new Date().getFullYear());
+  const doAno=ev.filter(e=>e.data.startsWith(ano));
+  const tot=doAno.reduce((s,e)=>s+e.valor,0);
+  const mesAtual=new Date().toISOString().slice(0,7);
+  const esteMes=ev.filter(e=>e.data.slice(0,7)===mesAtual).reduce((s,e)=>s+e.valor,0);
+  const porMes={};for(const e of ev){const k=e.data.slice(0,7);porMes[k]=(porMes[k]||0)+e.valor}
+  const meses=Object.keys(porMes).sort().slice(-12);
+  const nAno=new Set(doAno.map(e=>e.data.slice(0,7))).size||1;
+  const mx=Math.max(...meses.map(m=>porMes[m]));
+  const MN=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const cols=meses.map(m=>{const v=porMes[m];
+    return `<div class="rcol"><div class="rv">${v.toFixed(0)}</div><div class="rbar" style="height:${Math.max(4,v/mx*82).toFixed(0)}%"></div><div class="rm">${MN[+m.slice(5,7)-1]}</div></div>`}).join('');
+  const porAt={};for(const e of ev)porAt[e.ticker]=(porAt[e.ticker]||0)+e.valor;
+  const ats=Object.entries(porAt).sort((a,b)=>b[1]-a[1]);
+  const mxa=ats[0][1];
+  const rows=ats.map(([t,v])=>`<div class="arow"><div class="alab"><b>${t}</b><span>${brl(v,2)}</span></div>`
+    +`<div class="atrk"><div class="afill" style="width:${(v/mxa*100).toFixed(1)}%"></div></div></div>`).join('');
+  $('renda').innerHTML=`<h2>Renda passiva</h2>
+  <div class="mgrid3">
+    <div class="mcard"><div class="l">No ano</div><div class="v pos">${brl(tot,2)}</div></div>
+    <div class="mcard"><div class="l">Média mensal</div><div class="v">${brl(tot/nAno,2)}</div></div>
+    <div class="mcard"><div class="l">Este mês</div><div class="v">${brl(esteMes,2)}</div></div>
+  </div>
+  <div class="chart-box"><div class="rc">${cols}</div></div>
+  <details><summary>Renda por ativo</summary><div style="margin-top:8px">${rows}</div>
+  <div class="cap">Fonte: ${prov._fonte||'extrato'} · atualizado em ${prov._atualizado||''}</div></details>`;
 }
 
 function renderAloc(an){
@@ -366,6 +405,8 @@ async function refresh(force){
     noticias=nj?JSON.parse(nj.text):null;
     const ij=await ghGet('indicadores.json');
     indic=ij?JSON.parse(ij.text):null;
+    const pj=await ghGet('proventos.json');
+    prov=pj?JSON.parse(pj.text):null;
     const falhas=[];
     await Promise.all(carteira.ativos_bolsa.map(async a=>{const q=await quote(a.ticker);if(q)quotes[a.ticker]=q;else falhas.push(a.ticker)}));
     render(analisar(),falhas);

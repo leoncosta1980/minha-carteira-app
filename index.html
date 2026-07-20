@@ -12,7 +12,8 @@
 :root{--bg:#0E1613;--card:#182420;--border:#24352E;--tx:#E8F2ED;--mut:#8FA89C;--mint:#4ADE80;--red:#F87171;--amb:#FDBA74}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--tx);font-family:-apple-system,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.5;padding:16px 14px 70px;max-width:720px;margin:0 auto}
-h2{font-size:1rem;margin:22px 0 10px;letter-spacing:-.01em}
+h2{font-size:1.02rem;margin:28px 0 12px;letter-spacing:-.01em;border-top:1px solid var(--border);padding-top:20px}
+.sect-div{border-top:1px solid var(--border);margin:28px 0 16px}
 .hdr{display:flex;align-items:center;gap:11px;margin-bottom:14px}
 .hdr img{width:42px;height:42px;border-radius:11px}
 .hdr .t{font-size:1.35rem;font-weight:700;line-height:1.1}
@@ -46,8 +47,9 @@ tr:nth-child(even) td{background:#131E19}
 th:first-child,td:first-child{text-align:left;font-weight:700;position:sticky;left:0}
 th:first-child{background:var(--bg)}
 tr td:first-child{border-right:1px solid var(--border)}
-.gt{font-size:.85rem;margin:16px 0 4px;color:var(--tx)}
-.gt b{font-weight:700}.gt span{color:var(--mut);font-weight:400;font-size:.78rem}
+.gt{font-size:.9rem;margin:20px 0 6px;color:var(--tx);display:flex;align-items:center;gap:8px}
+.gt::before{content:'';width:4px;height:15px;background:var(--mint);border-radius:2px;flex-shrink:0}
+.gt b{font-weight:700;font-size:.95rem}.gt span{color:var(--mut);font-weight:400;font-size:.78rem}
 canvas{max-width:100%}
 .chart-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin:8px 0}
 details{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin:8px 0}
@@ -125,7 +127,8 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <button id="bt-ia" onclick="runIA()" style="width:100%">Gerar análise da carteira com IA</button>
   <div id="ia-out" class="ia-out hide"></div>
   <div id="news"></div>
-  <details><summary>Editar carteira (quantidade, preço médio, metas)</summary>
+  <div class="sect-div"></div>
+  <details><summary>✏️ Editar carteira (quantidade, preço médio, metas)</summary>
     <p class="cap">Salva no carteira.json do GitHub — o WhatsApp usa os novos números na próxima execução.</p>
     <div id="edit-area"></div>
     <div style="margin-top:10px"><button onclick="saveCarteira()">Salvar alterações</button> <span id="soma-metas" class="cap"></span></div>

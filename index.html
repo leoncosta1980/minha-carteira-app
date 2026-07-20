@@ -59,6 +59,14 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
 .center{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:14vh;text-align:center}
 .center img{width:76px;height:76px;border-radius:18px}
 .center input{max-width:280px;text-align:center}
+.arow{margin:11px 0}
+.alab{display:flex;justify-content:space-between;align-items:baseline;font-size:.78rem;margin-bottom:5px}
+.alab b{font-size:.85rem}
+.alab span{color:var(--mut)}
+.atrk{position:relative;height:9px;border-radius:5px;background:#233129}
+.afill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--mint);transition:width .5s ease}
+.afill.low{background:#EF9F27}
+.amark{position:absolute;top:-3px;bottom:-3px;width:2px;background:#E8F2ED;opacity:.8;border-radius:1px}
 </style>
 </head>
 <body>
@@ -94,7 +102,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div id="alerts"></div>
   <div class="chart-box hide" id="hist-box"><div class="gt" style="margin:0 0 6px"><b>Evolução do patrimônio</b></div><canvas id="ch-hist" height="150"></canvas></div>
   <h2>Alocação: atual × meta</h2>
-  <div class="chart-box"><canvas id="ch-aloc"></canvas></div>
+  <div id="aloc"></div>
   <h2>Ativos</h2>
   <div id="assets"></div>
   <h2>Notícias e análise</h2>
@@ -223,20 +231,23 @@ function renderAssets(an){
   $('assets').innerHTML=h;
 }
 
+function renderAloc(an){
+  const rows=[];
+  for(const a of carteira.ativos_bolsa)rows.push({n:a.ticker,at:a._v/an.patr,mt:a.meta_pct});
+  for(const rf of carteira.renda_fixa)rows.push({n:rf.nome.split(' (')[0].replace('Tesouro ',''),at:rf.valor/an.patr,mt:rf.meta_pct});
+  const mx=Math.max(...rows.map(r=>Math.max(r.at,r.mt)))*1.08;
+  $('aloc').innerHTML='<div class="chart-box">'+rows.map(r=>{
+    const low=(r.mt-r.at)>=carteira.parametros.desvio_alerta;
+    return `<div class="arow"><div class="alab"><b>${r.n}</b><span>${pct(r.at)} <span style="opacity:.65">/ meta ${pct(r.mt,0)}</span></span></div>`
+      +`<div class="atrk"><div class="afill${low?' low':''}" style="width:${(r.at/mx*100).toFixed(1)}%"></div>`
+      +`<div class="amark" style="left:${(r.mt/mx*100).toFixed(1)}%"></div></div></div>`;
+  }).join('')
+  +'<div class="cap" style="margin:8px 0 0">Barra = alocação atual · traço = meta · <span style="color:#EF9F27">laranja</span> = abaixo da meta (prioridade de aporte)</div></div>';
+}
+
 function renderCharts(an){
-  if(typeof Chart==='undefined'){
-    $('ch-aloc').parentElement.innerHTML='<p class="cap">Gráficos indisponíveis: biblioteca bloqueada pelo navegador/adblock (cdn.jsdelivr.net). Os dados acima continuam completos.</p>';
-    return;
-  }
-  const labels=[],atual=[],meta=[];
-  for(const a of carteira.ativos_bolsa){labels.push(a.ticker);atual.push(+(a._v/an.patr*100).toFixed(2));meta.push(+(a.meta_pct*100).toFixed(2))}
-  for(const rf of carteira.renda_fixa){labels.push(rf.nome.split(' (')[0].replace('Tesouro ',''));atual.push(+(rf.valor/an.patr*100).toFixed(2));meta.push(+(rf.meta_pct*100).toFixed(2))}
-  if(charts.aloc)charts.aloc.destroy();
-  charts.aloc=new Chart($('ch-aloc'),{type:'bar',data:{labels,datasets:[
-    {label:'Atual (%)',data:atual,backgroundColor:'#4ADE80'},
-    {label:'Meta (%)',data:meta,backgroundColor:'#2D5A4A'}]},
-    options:{indexAxis:'y',responsive:true,plugins:{legend:{labels:{color:'#8FA89C'}}},
-    scales:{x:{ticks:{color:'#8FA89C'},grid:{color:'#24352E'}},y:{ticks:{color:'#E8F2ED'},grid:{display:false}}}}});
+  renderAloc(an);
+  if(typeof Chart==='undefined')return;
   if(hist&&hist.length>1){
     $('hist-box').classList.remove('hide');
     if(charts.hist)charts.hist.destroy();

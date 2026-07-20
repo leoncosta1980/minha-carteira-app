@@ -318,27 +318,52 @@ function renderRenda(){
       return `<div class="rcol"><div class="rv">${v.toFixed(0)}</div><div class="rbar" style="height:${Math.max(4,v/mx*82).toFixed(0)}%"></div><div class="rm">${MN[+m.slice(5,7)-1]}</div></div>`}).join('');
     grafico=`<div class="chart-box"><div class="rc">${cols}</div></div>`;
   }
-  const porAt={};for(const e of ev)porAt[e.ticker]=(porAt[e.ticker]||0)+e.valor;
-  const ats=Object.entries(porAt).sort((a,b)=>b[1]-a[1]);
-  const mxa=ats.length?ats[0][1]:1;
-  const rows=ats.map(([t,v])=>`<div class="arow"><div class="alab"><b>${t}</b><span>${brl(v,2)}</span></div>`
-    +`<div class="atrk"><div class="afill" style="width:${(v/mxa*100).toFixed(1)}%"></div></div></div>`).join('');
+  // Custo por ticker (qtd x PM) para calcular o yield on cost
+  const custoDe=t=>{
+    if(t==='Tesouro')return carteira.renda_fixa.reduce((s,r)=>s+r.valor,0);
+    const a=carteira.ativos_bolsa.find(x=>x.ticker===t);
+    return a?a.qtd*a.pm:0;
+  };
+  const hoje_d=new Date();
+  const porAt={},primeiro={};
+  for(const e of ev){
+    porAt[e.ticker]=(porAt[e.ticker]||0)+e.valor;
+    if(!primeiro[e.ticker]||e.data<primeiro[e.ticker])primeiro[e.ticker]=e.data;
+  }
+  // yield mensal medio = (total recebido / meses desde o 1o provento) / custo
+  const yieldM={};
+  for(const t of Object.keys(porAt)){
+    const c=custoDe(t);
+    const meses_t=Math.max(1,(hoje_d-new Date(primeiro[t]))/2629800000);
+    yieldM[t]=c>0?(porAt[t]/meses_t)/c:0;
+  }
+  const ats=Object.entries(porAt).sort((a,b)=>(yieldM[b[0]]||0)-(yieldM[a[0]]||0));
+  const mxy=ats.length?Math.max(...ats.map(([t])=>yieldM[t]||0)):1;
+  const rows=ats.map(([t,v])=>{
+    const y=yieldM[t]||0;
+    return `<div class="arow"><div class="alab"><b>${t}</b><span><b>${(y*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}%/mês</b> · ${brl(v,2)} no período</span></div>`
+      +`<div class="atrk"><div class="afill" style="width:${mxy?(y/mxy*100).toFixed(1):0}%"></div></div></div>`;
+  }).join('');
 
   // A receber (lancamentos previstos, ordenados por data)
   const prevs=(prov.previstos||[]).slice().sort((a,b)=>a.data.localeCompare(b.data));
   const somaPrev=prevs.reduce((s,e)=>s+e.valor,0);
-  const prevRows=prevs.map(e=>
-    `<div class="alab" style="margin:9px 0"><b>${e.ticker}</b><span>${e.data.split('-').reverse().join('/')} · <b>${brl(e.valor,2)}</b>`
+  const prevRows=prevs.map(e=>{
+    const c=custoDe(e.ticker);
+    const pctPos=c>0?` <span style="opacity:.75">(${(e.valor/c*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}% da posição)</span>`:'';
+    return `<div class="alab" style="margin:9px 0"><b>${e.ticker}</b><span>${e.data.split('-').reverse().join('/')} · <b>${brl(e.valor,2)}</b>${pctPos}`
     +`<button class="mini" onclick="recProv(${e.id})" title="Confirmar recebido">✔</button>`
     +`<button class="mini" onclick="editProv(${e.id})" title="Editar">✎</button>`
-    +`<button class="mini" onclick="delProv(${e.id})" title="Excluir">🗑</button></span></div>`).join('');
+    +`<button class="mini" onclick="delProv(${e.id})" title="Excluir">🗑</button></span></div>`;}).join('');
 
+  const custoBolsa=carteira.ativos_bolsa.reduce((s,a)=>s+a.qtd*a.pm,0)
+    +carteira.renda_fixa.reduce((s,r)=>s+r.valor,0);
   const hoje=new Date().toISOString().slice(0,10);
   const opts=carteira.ativos_bolsa.map(a=>`<option>${a.ticker}</option>`).join('')+'<option>Tesouro</option>';
   $('renda').innerHTML=`<h2>Renda passiva</h2>
   <div class="mgrid3">
     <div class="mcard"><div class="l">No ano</div><div class="v pos">${brl(tot,2)}</div></div>
-    <div class="mcard"><div class="l">Média mensal</div><div class="v">${brl(tot/nAno,2)}</div></div>
+    <div class="mcard"><div class="l">Média mensal</div><div class="v">${brl(tot/nAno,2)}</div><div class="d">≈ ${(custoBolsa>0?(tot/nAno)/custoBolsa*100:0).toLocaleString('pt-BR',{maximumFractionDigits:2})}%/mês s/ custo</div></div>
     <div class="mcard"><div class="l">Este mês</div><div class="v">${brl(esteMes,2)}</div></div>
   </div>
   ${grafico}

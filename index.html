@@ -11,7 +11,14 @@
 <style>
 :root{--bg:#0E1613;--card:#182420;--border:#24352E;--tx:#E8F2ED;--mut:#8FA89C;--mint:#4ADE80;--red:#F87171;--amb:#FDBA74}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--tx);font-family:-apple-system,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.5;padding:16px 14px 70px;max-width:720px;margin:0 auto}
+body{background:var(--bg);color:var(--tx);font-family:-apple-system,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.5;padding:16px 14px 100px;max-width:720px;margin:0 auto}
+#nav{position:fixed;bottom:0;left:0;right:0;background:#0B120F;border-top:1px solid var(--border);z-index:6}
+#nav .in{max-width:720px;margin:0 auto;display:flex}
+#nav button{flex:1;background:none;border:0;border-radius:0;color:var(--mut);font-size:.64rem;font-weight:700;padding:7px 0 calc(9px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:1px}
+#nav button .ic{font-size:1.2rem;line-height:1.2}
+#nav button.on{color:var(--mint)}
+.tab>h2:first-child,#renda>h2:first-child{border-top:0;padding-top:2px;margin-top:6px}
+button.mais{width:100%;text-align:left;font-size:.9rem;padding:13px 14px}
 h2{font-size:1.02rem;margin:28px 0 12px;letter-spacing:-.01em;border-top:1px solid var(--border);padding-top:20px}
 .sect-div{border-top:1px solid var(--border);margin:28px 0 16px}
 .hdr{display:flex;align-items:center;gap:11px;margin-bottom:14px}
@@ -124,14 +131,19 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
     <img src="icone-192.png" alt="">
     <div><div class="t">Minha Carteira</div><div class="s" id="sub">renda passiva em construção</div></div>
     <div class="sp"></div>
-    <button class="sec" onclick="exportarPDF()" aria-label="Exportar PDF">📄</button>
-    <button class="sec" onclick="sair()" aria-label="Bloquear">🔒</button>
-    <button class="sec" onclick="openCfg()" aria-label="Configurações">⚙</button>
     <button onclick="refresh(true)">Atualizar</button>
   </div>
   <div id="warns"></div>
+  <div class="tab" id="tab-inicio">
   <div class="mgrid" id="metrics"></div>
   <div id="alerts"></div>
+  <div class="chart-box hide" id="hist-box"><div class="gt" style="margin:0 0 6px"><b>Evolução do patrimônio</b></div><canvas id="ch-hist" height="150"></canvas></div>
+  <h2>Alocação: atual × meta</h2>
+  <div id="aloc"></div>
+  </div>
+  <div class="tab hide" id="tab-ativos">
+  <h2>Ativos</h2>
+  <div id="assets"></div>
   <h2>Simular aporte</h2>
   <div class="chart-box">
     <div style="display:flex;gap:8px">
@@ -145,6 +157,9 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
     </div>
     <div id="sim-out"></div>
   </div>
+  </div>
+  <div class="tab hide" id="tab-renda">
+  <div id="renda"></div>
   <h2>Projeção bola de neve</h2>
   <div class="chart-box">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -158,23 +173,41 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
     <div id="pj-out"></div>
     <div style="position:relative"><canvas id="ch-pj" class="hide" height="170"></canvas></div>
   </div>
-  <div id="renda"></div>
-  <div class="chart-box hide" id="hist-box"><div class="gt" style="margin:0 0 6px"><b>Evolução do patrimônio</b></div><canvas id="ch-hist" height="150"></canvas></div>
-  <h2>Alocação: atual × meta</h2>
-  <div id="aloc"></div>
-  <h2>Ativos</h2>
-  <div id="assets"></div>
-  <h2>Notícias e análise</h2>
+  </div>
+  <div class="tab hide" id="tab-analise">
+  <h2>Análise com IA</h2>
   <button id="bt-ia" onclick="runIA()" style="width:100%">Gerar análise da carteira com IA</button>
   <div id="ia-out" class="ia-out hide"></div>
+  <h2>Notícias por ativo</h2>
   <div id="news"></div>
-  <div class="sect-div"></div>
+  </div>
+  <div class="tab hide" id="tab-mais">
+  <div class="chart-box" style="display:flex;flex-direction:column;gap:8px">
+    <button class="sec mais" onclick="exportarPDF()">📄 Exportar relatório PDF</button>
+    <button class="sec mais" onclick="sair()">🔒 Bloquear o app</button>
+    <button class="sec mais" onclick="openCfg()">⚙️ Configurações e chaves</button>
+  </div>
   <details><summary>✏️ Editar carteira (quantidade, preço médio, metas)</summary>
     <p class="cap">Salva no carteira.json do GitHub — o WhatsApp usa os novos números na próxima execução.</p>
     <div id="edit-area"></div>
     <div style="margin-top:10px"><button onclick="saveCarteira()">Salvar alterações</button> <span id="soma-metas" class="cap"></span></div>
   </details>
+  <div class="chart-box" style="text-align:center;margin-top:16px">
+    <img src="icone-192.png" style="width:52px;height:52px;border-radius:13px" alt="">
+    <p style="font-weight:700;margin:8px 0 2px">Minha Carteira</p>
+    <p class="cap" style="margin:0">Versão 2.0.0 · julho de 2026</p>
+    <p class="cap" style="margin:8px 0 0">Desenvolvido por <b>Leonardo de Oliveira da Costa</b></p>
+    <p class="cap" style="margin:2px 0 0">Dados: brapi.dev · IA: Google Gemini · Hospedagem: GitHub Pages</p>
+  </div>
   <p class="cap">Ferramenta de apoio à decisão — não é recomendação de investimento. Cotações com ~15 min de atraso.</p>
+  </div>
+  <div id="nav"><div class="in">
+    <button data-t="inicio" class="on" onclick="aba('inicio',this)"><span class="ic">🏠</span>Início</button>
+    <button data-t="ativos" onclick="aba('ativos',this)"><span class="ic">📊</span>Ativos</button>
+    <button data-t="renda" onclick="aba('renda',this)"><span class="ic">💰</span>Renda</button>
+    <button data-t="analise" onclick="aba('analise',this)"><span class="ic">💡</span>Análise</button>
+    <button data-t="mais" onclick="aba('mais',this)"><span class="ic">⋯</span>Mais</button>
+  </div></div>
 </div>
 
 <div id="toast"></div>
@@ -207,6 +240,15 @@ const pct=(v,d=1)=>(v*100).toLocaleString('pt-BR',{minimumFractionDigits:d,maxim
 function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2600)}
 
 function show(id){for(const s of['scr-pin','scr-cfg','scr-app'])$(s).classList.add('hide');$(id).classList.remove('hide')}
+function aba(id,el){
+  for(const t of document.querySelectorAll('.tab'))t.classList.add('hide');
+  const alvo=$('tab-'+id);if(alvo)alvo.classList.remove('hide');
+  for(const b of document.querySelectorAll('#nav button'))b.classList.remove('on');
+  const btn=el||document.querySelector(`#nav button[data-t="${id}"]`);
+  if(btn)btn.classList.add('on');
+  localStorage.setItem('mc_tab',id);
+  window.scrollTo({top:0});
+}
 function showApp(){show('scr-app')}
 function openCfg(){$('c-repo').value=cfg.repo||'';$('c-gh').value=cfg.gh||'';$('c-brapi').value=cfg.brapi||'';$('c-gem').value=cfg.gem||'';$('c-pin').value=cfg.pin||'';show('scr-cfg')}
 function saveCfg(){
@@ -814,6 +856,7 @@ try{
 }catch(e){}
 
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+aba(localStorage.getItem('mc_tab')||'inicio');
 if(!cfg.repo||!cfg.gh)openCfg();
 else if(cfg.pin&&sessionStorage.getItem('mc_ok')!=='1')show('scr-pin');
 else{show('scr-app');refresh(false)}

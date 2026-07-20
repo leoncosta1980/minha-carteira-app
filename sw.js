@@ -1,4 +1,4 @@
-const CACHE = "mc-v2";
+const CACHE = "mc-v3";
 const SHELL = ["./", "index.html", "manifest.json", "icone-192.png", "icone-512.png"];
 
 self.addEventListener("install", (e) => {

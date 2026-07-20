@@ -40,7 +40,12 @@ table{border-collapse:collapse;width:100%;font-size:.8rem;white-space:nowrap}
 th{color:var(--mut);font-weight:500;text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);font-size:.7rem}
 td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--border)}
 tr:last-child td{border-bottom:0}
-th:first-child,td:first-child{text-align:left;font-weight:700;position:sticky;left:0;background:var(--bg)}
+td{background:var(--bg)}
+tbody tr:nth-child(even) td,tr:nth-child(odd) td{background:var(--bg)}
+tr:nth-child(even) td{background:#131E19}
+th:first-child,td:first-child{text-align:left;font-weight:700;position:sticky;left:0}
+th:first-child{background:var(--bg)}
+tr td:first-child{border-right:1px solid var(--border)}
 .gt{font-size:.85rem;margin:16px 0 4px;color:var(--tx)}
 .gt b{font-weight:700}.gt span{color:var(--mut);font-weight:400;font-size:.78rem}
 canvas{max-width:100%}
@@ -135,6 +140,13 @@ let cfg=JSON.parse(localStorage.getItem(LSK)||'{}');
 let carteira=null,quotes={},hist=null,noticias=null,indic=null,charts={};
 
 const brl=(v,d=0)=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const num2=v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+function maskMoney(el){
+  let d=el.value.replace(/\D/g,'').replace(/^0+(?=\d)/,'');
+  el.dataset.raw=d||'0';
+  el.value=(parseInt(d||'0',10)/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+const moneyVal=el=>parseInt(el.dataset.raw||'0',10)/100;
 const pct=(v,d=1)=>(v*100).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d})+'%';
 function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2600)}
 
@@ -210,8 +222,8 @@ function render(an,falhas){
   const custo=carteira.ativos_bolsa.reduce((s,a)=>s+a.qtd*a.pm,0);
   const res=an.patr-an.vrf-custo,cls=res>=0?'pos':'neg';
   $('metrics').innerHTML=
-    `<div class="mcard"><div class="l">Patrimônio</div><div class="v">${brl(an.patr)}</div><div class="d">bolsa ${brl(an.patr-an.vrf)} · tesouro ${brl(an.vrf)}</div></div>`+
-    `<div class="mcard"><div class="l">Resultado na bolsa</div><div class="v ${cls}">${brl(res)}</div><div class="d ${cls}">${pct(res/custo)} sobre o custo</div></div>`;
+    `<div class="mcard"><div class="l">Patrimônio</div><div class="v">${brl(an.patr,2)}</div><div class="d">bolsa ${brl(an.patr-an.vrf,2)} · tesouro ${brl(an.vrf,2)}</div></div>`+
+    `<div class="mcard"><div class="l">Resultado na bolsa</div><div class="v ${cls}">${brl(res,2)}</div><div class="d ${cls}">${pct(res/custo)} sobre o custo (sem contar dividendos)</div></div>`;
   let al='';
   if(an.op.length)al+=`<div class="al op"><div class="h">Zona de compra</div><ul>${an.op.map(o=>`<li>${o.txt}${o.forte?' <span class="chip">SINAL FORTE</span>':''}</li>`).join('')}</ul></div>`;
   al+=an.reb.length
@@ -229,7 +241,7 @@ function renderAssets(an){
     const sub=as.reduce((s,a)=>s+a._v,0);
     h+=`<div class="gt"><b>${tit}</b> <span>· ${brl(sub)} (${pct(sub/an.patr)})</span></div><div class="tblw"><table><tr><th>Ativo</th><th>Qtd</th><th>PM</th><th>Atual</th><th>Posição</th><th>Var</th><th>%cart</th><th>Meta</th><th>Teto</th><th>RSI</th></tr>`;
     for(const a of as){const v=(a._p-a.pm)/a.pm;
-      h+=`<tr><td>${a.ticker}</td><td>${a.qtd}</td><td>${a.pm.toFixed(2)}</td><td>${a._p.toFixed(2)}</td><td>${brl(a._v)}</td><td class="${v>=0?'pos':'neg'}">${pct(v)}</td><td>${pct(a._v/an.patr)}</td><td>${pct(a.meta_pct,0)}</td><td>${a._teto?a._teto.toFixed(2):'—'}</td><td>${a._rsi!=null?Math.round(a._rsi):'—'}</td></tr>`}
+      h+=`<tr><td>${a.ticker}</td><td>${a.qtd}</td><td>${num2(a.pm)}</td><td>${num2(a._p)}</td><td>${brl(a._v,2)}</td><td class="${v>=0?'pos':'neg'}">${pct(v)}</td><td>${pct(a._v/an.patr)}</td><td>${pct(a.meta_pct,0)}</td><td>${a._teto?num2(a._teto):'—'}</td><td>${a._rsi!=null?Math.round(a._rsi):'—'}</td></tr>`}
     h+='</table></div>';
   }
   const vrf=an.vrf;
@@ -278,10 +290,11 @@ function renderNews(){
 }
 
 function renderEdit(){
-  let h='<div class="tblw"><table><tr><th>Ativo</th><th>Qtd</th><th>PM</th><th>Meta %</th></tr>';
-  carteira.ativos_bolsa.forEach((a,i)=>{h+=`<tr><td>${a.ticker}</td><td><input id="e-q-${i}" type="number" step="any" value="${a.qtd}"></td><td><input id="e-p-${i}" type="number" step="0.01" value="${a.pm}"></td><td><input id="e-m-${i}" type="number" step="0.1" value="${(a.meta_pct*100).toFixed(1)}"></td></tr>`});
-  h+='</table></div><div class="tblw"><table><tr><th>Título</th><th>Valor</th><th>Meta %</th></tr>';
-  carteira.renda_fixa.forEach((rf,i)=>{h+=`<tr><td>${rf.nome}</td><td><input id="e-rv-${i}" type="number" step="0.01" value="${rf.valor}"></td><td><input id="e-rm-${i}" type="number" step="0.1" value="${(rf.meta_pct*100).toFixed(1)}"></td></tr>`});
+  const money=(id,v,w)=>`<input id="${id}" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="${Math.round(v*100)}" value="${num2(v)}"${w?` style="width:${w}px"`:''}>`;
+  let h='<div class="tblw"><table><tr><th>Ativo</th><th>Qtd</th><th>PM (R$)</th><th>Meta %</th></tr>';
+  carteira.ativos_bolsa.forEach((a,i)=>{h+=`<tr><td>${a.ticker}</td><td><input id="e-q-${i}" type="number" step="any" value="${a.qtd}"></td><td>${money(`e-p-${i}`,a.pm)}</td><td><input id="e-m-${i}" type="number" step="0.1" value="${(a.meta_pct*100).toFixed(1)}"></td></tr>`});
+  h+='</table></div><div class="tblw"><table><tr><th>Título</th><th>Valor (R$)</th><th>Meta %</th></tr>';
+  carteira.renda_fixa.forEach((rf,i)=>{h+=`<tr><td>${rf.nome}</td><td>${money(`e-rv-${i}`,rf.valor,100)}</td><td><input id="e-rm-${i}" type="number" step="0.1" value="${(rf.meta_pct*100).toFixed(1)}"></td></tr>`});
   h+='</table></div>';
   $('edit-area').innerHTML=h;
 }
@@ -289,8 +302,8 @@ function renderEdit(){
 async function saveCarteira(){
   try{
     let soma=0;
-    carteira.ativos_bolsa.forEach((a,i)=>{a.qtd=parseFloat($(`e-q-${i}`).value)||a.qtd;a.pm=parseFloat($(`e-p-${i}`).value)||a.pm;a.meta_pct=Math.round((parseFloat($(`e-m-${i}`).value)||0)*10)/1000;soma+=a.meta_pct});
-    carteira.renda_fixa.forEach((rf,i)=>{rf.valor=parseFloat($(`e-rv-${i}`).value)||rf.valor;rf.meta_pct=Math.round((parseFloat($(`e-rm-${i}`).value)||0)*10)/1000;soma+=rf.meta_pct});
+    carteira.ativos_bolsa.forEach((a,i)=>{a.qtd=parseFloat($(`e-q-${i}`).value)||a.qtd;a.pm=moneyVal($(`e-p-${i}`))||a.pm;a.meta_pct=Math.round((parseFloat($(`e-m-${i}`).value)||0)*10)/1000;soma+=a.meta_pct});
+    carteira.renda_fixa.forEach((rf,i)=>{rf.valor=moneyVal($(`e-rv-${i}`))||rf.valor;rf.meta_pct=Math.round((parseFloat($(`e-rm-${i}`).value)||0)*10)/1000;soma+=rf.meta_pct});
     $('soma-metas').textContent=Math.abs(soma-1)>.005?`Atenção: metas somam ${pct(soma,1)} (ideal 100%)`:'';
     const limpa=JSON.parse(JSON.stringify(carteira));
     for(const a of limpa.ativos_bolsa)for(const k of Object.keys(a))if(k.startsWith('_')&&k!=='_nota')delete a[k];

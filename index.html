@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Minha Carteira</title>
+<meta name="theme-color" content="#0E1613">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icone-192.png">
+<link rel="apple-touch-icon" href="icone-192.png">
+<style>
+:root{--bg:#0E1613;--card:#182420;--border:#24352E;--tx:#E8F2ED;--mut:#8FA89C;--mint:#4ADE80;--red:#F87171;--amb:#FDBA74}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:-apple-system,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.5;padding:16px 14px 70px;max-width:720px;margin:0 auto}
+h2{font-size:1rem;margin:22px 0 10px;letter-spacing:-.01em}
+.hdr{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.hdr img{width:42px;height:42px;border-radius:11px}
+.hdr .t{font-size:1.35rem;font-weight:700;line-height:1.1}
+.hdr .s{font-size:.72rem;color:var(--mut)}
+.hdr .sp{flex:1}
+button{background:var(--mint);color:#0B1F16;border:0;border-radius:10px;padding:10px 14px;font-weight:700;font-size:.85rem;cursor:pointer}
+button.sec{background:var(--card);color:var(--tx);border:1px solid var(--border)}
+button:active{transform:scale(.97)}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+.mcard{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+.mcard .l{font-size:.68rem;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
+.mcard .v{font-size:1.3rem;font-weight:700}
+.mcard .d{font-size:.74rem;color:var(--mut)}
+.pos{color:var(--mint)}.neg{color:var(--red)}
+.al{border-radius:12px;padding:11px 14px;margin:8px 0;font-size:.86rem;border:1px solid}
+.al .h{font-weight:700;font-size:.76rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.al ul{margin-left:18px}
+.al.buy{background:#24160F;border-color:#7C2D12;color:var(--amb)}
+.al.op{background:#10241A;border-color:#166534;color:#86EFAC}
+.al.plan{background:#101D2E;border-color:#1E40AF;color:#93C5FD}
+.warn{background:#292112;border:1px solid #713F12;color:#FDE68A;border-radius:12px;padding:10px 14px;font-size:.84rem;margin:8px 0}
+.tblw{overflow-x:auto;border:1px solid var(--border);border-radius:12px;margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:.8rem;white-space:nowrap}
+th{color:var(--mut);font-weight:500;text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);font-size:.7rem}
+td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:0}
+th:first-child,td:first-child{text-align:left;font-weight:700;position:sticky;left:0;background:var(--bg)}
+.gt{font-size:.85rem;margin:16px 0 4px;color:var(--tx)}
+.gt b{font-weight:700}.gt span{color:var(--mut);font-weight:400;font-size:.78rem}
+canvas{max-width:100%}
+.chart-box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin:8px 0}
+details{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin:8px 0}
+summary{font-weight:700;font-size:.88rem;cursor:pointer}
+details .nt{margin:10px 0}
+details .nt a{color:var(--mint);text-decoration:none;font-size:.84rem}
+details .nt .f{color:var(--mut);font-size:.72rem}
+input{background:var(--bg);border:1px solid var(--border);color:var(--tx);border-radius:8px;padding:8px 10px;font-size:.88rem;width:100%}
+td input{width:76px;padding:5px 6px;text-align:right}
+label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
+.ia-out{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;font-size:.88rem;margin:8px 0;white-space:pre-wrap}
+.cap{color:var(--mut);font-size:.74rem;margin:8px 0}
+.hide{display:none}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--mint);color:#0B1F16;font-weight:700;padding:10px 18px;border-radius:20px;font-size:.85rem;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9}
+.center{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:14vh;text-align:center}
+.center img{width:76px;height:76px;border-radius:18px}
+.center input{max-width:280px;text-align:center}
+</style>
+</head>
+<body>
+
+<div id="scr-pin" class="center hide">
+  <img src="icone-192.png" alt=""><div class="hdr" style="margin:0"><div><div class="t">Minha Carteira</div><div class="s">digite seu PIN</div></div></div>
+  <input id="pin-in" type="password" inputmode="numeric" placeholder="PIN">
+  <button onclick="checkPin()">Entrar</button>
+</div>
+
+<div id="scr-cfg" class="hide">
+  <div class="hdr"><img src="icone-192.png" alt=""><div><div class="t">Configuração</div><div class="s">feita uma vez, fica salva neste aparelho</div></div></div>
+  <label>Repositório privado (usuário/repo)</label><input id="c-repo" placeholder="leoncosta1980/agente-carteira">
+  <label>Token do GitHub (fine-grained, Contents RW)</label><input id="c-gh" placeholder="github_pat_...">
+  <label>Token da brapi</label><input id="c-brapi" placeholder="token brapi.dev">
+  <label>Chave do Gemini (opcional, para análise IA)</label><input id="c-gem" placeholder="AIza...">
+  <label>PIN de acesso (opcional, 4+ dígitos)</label><input id="c-pin" inputmode="numeric" placeholder="deixe vazio para não usar">
+  <div style="margin-top:16px;display:flex;gap:8px"><button onclick="saveCfg()">Salvar e abrir</button><button class="sec" onclick="showApp()">Cancelar</button></div>
+  <p class="cap">As chaves ficam somente no seu aparelho (localStorage), nunca no código do app.</p>
+</div>
+
+<div id="scr-app" class="hide">
+  <div class="hdr">
+    <img src="icone-192.png" alt="">
+    <div><div class="t">Minha Carteira</div><div class="s" id="sub">renda passiva em construção</div></div>
+    <div class="sp"></div>
+    <button class="sec" onclick="openCfg()" aria-label="Configurações">⚙</button>
+    <button onclick="refresh(true)">Atualizar</button>
+  </div>
+  <div id="warns"></div>
+  <div class="mgrid" id="metrics"></div>
+  <div id="alerts"></div>
+  <div class="chart-box hide" id="hist-box"><div class="gt" style="margin:0 0 6px"><b>Evolução do patrimônio</b></div><canvas id="ch-hist" height="150"></canvas></div>
+  <h2>Alocação: atual × meta</h2>
+  <div class="chart-box"><canvas id="ch-aloc"></canvas></div>
+  <h2>Ativos</h2>
+  <div id="assets"></div>
+  <h2>Notícias e análise</h2>
+  <button id="bt-ia" onclick="runIA()" style="width:100%">Gerar análise da carteira com IA</button>
+  <div id="ia-out" class="ia-out hide"></div>
+  <div id="news"></div>
+  <details><summary>Editar carteira (quantidade, preço médio, metas)</summary>
+    <p class="cap">Salva no carteira.json do GitHub — o WhatsApp usa os novos números na próxima execução.</p>
+    <div id="edit-area"></div>
+    <div style="margin-top:10px"><button onclick="saveCarteira()">Salvar alterações</button> <span id="soma-metas" class="cap"></span></div>
+  </details>
+  <p class="cap">Ferramenta de apoio à decisão — não é recomendação de investimento. Cotações com ~15 min de atraso.</p>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const LSK='mc_cfg';
+let cfg=JSON.parse(localStorage.getItem(LSK)||'{}');
+let carteira=null,quotes={},hist=null,noticias=null,charts={};
+
+const brl=(v,d=0)=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct=(v,d=1)=>(v*100).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d})+'%';
+function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2600)}
+
+function show(id){for(const s of['scr-pin','scr-cfg','scr-app'])$(s).classList.add('hide');$(id).classList.remove('hide')}
+function showApp(){show('scr-app')}
+function openCfg(){$('c-repo').value=cfg.repo||'';$('c-gh').value=cfg.gh||'';$('c-brapi').value=cfg.brapi||'';$('c-gem').value=cfg.gem||'';$('c-pin').value=cfg.pin||'';show('scr-cfg')}
+function saveCfg(){cfg={repo:$('c-repo').value.trim(),gh:$('c-gh').value.trim(),brapi:$('c-brapi').value.trim(),gem:$('c-gem').value.trim(),pin:$('c-pin').value.trim()};localStorage.setItem(LSK,JSON.stringify(cfg));show('scr-app');refresh(true)}
+function checkPin(){if($('pin-in').value===cfg.pin){sessionStorage.setItem('mc_ok','1');show('scr-app');refresh(false)}else toast('PIN incorreto')}
+
+const ghH=()=>({Authorization:'Bearer '+cfg.gh,Accept:'application/vnd.github+json'});
+const b64dec=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g,'')),c=>c.charCodeAt(0)));
+const b64enc=s=>btoa(unescape(encodeURIComponent(s)));
+async function ghGet(path){const r=await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}?t=${Date.now()}`,{headers:ghH()});if(!r.ok)return null;const j=await r.json();return{text:b64dec(j.content),sha:j.sha}}
+async function ghPut(path,text,msg){const cur=await ghGet(path);const body={message:msg,content:b64enc(text)};if(cur)body.sha=cur.sha;const r=await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`,{method:'PUT',headers:{...ghH(),'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(`GitHub recusou (HTTP ${r.status}) ${j.message||''}`)}}
+
+async function quote(t){
+  const tok=cfg.brapi?`token=${cfg.brapi}`:'';
+  for(const p of['range=3mo&interval=1d&fundamental=true&dividends=true','range=3mo&interval=1d','']){
+    try{const q=[p,tok].filter(Boolean).join('&');
+      const r=await fetch(`https://brapi.dev/api/quote/${t}${q?'?'+q:''}`);
+      if(!r.ok)continue;
+      const res=(await r.json()).results[0];
+      if(res&&res.regularMarketPrice)return res;
+    }catch(e){}
+  }
+  return null;
+}
+
+function rsi(closes,n=14){if(!closes||closes.length<n+1)return null;const d=[];for(let i=1;i<closes.length;i++)d.push(closes[i]-closes[i-1]);const w=d.slice(-n);let g=0,p=0;for(const x of w){if(x>0)g+=x;else p-=x}g/=n;p/=n;if(p===0)return 100;return 100-100/(1+g/p)}
+function tetoBazin(res,a){if(a.teto_manual)return a.teto_manual;if(!res||!a.yield_bazin)return null;const cds=res.dividendsData&&res.dividendsData.cashDividends;if(!cds||!cds.length)return null;const lim=Date.now()-365*864e5;let tot=0;for(const d of cds){const dt=Date.parse(d.paymentDate||d.lastDatePrior||'');if(dt>=lim&&d.rate)tot+=d.rate}return tot>0?tot/a.yield_bazin:null}
+
+function analisar(){
+  const P=carteira.parametros,out={urg:[],op:[],reb:[]};
+  let patr=0;
+  for(const a of carteira.ativos_bolsa){a._p=(quotes[a.ticker]&&quotes[a.ticker].regularMarketPrice)||a.pm;a._v=a.qtd*a._p;patr+=a._v}
+  const vrf=carteira.renda_fixa.reduce((s,r)=>s+r.valor,0);patr+=vrf;out.patr=patr;out.vrf=vrf;
+  for(const a of carteira.ativos_bolsa){
+    const res=quotes[a.ticker],pc=a._v/patr,dv=a.meta_pct-pc,sin=[];
+    if(dv>=P.desvio_alerta)out.reb.push({t:a.ticker,pc,meta:a.meta_pct,ap:dv*patr});
+    const teto=tetoBazin(res,a);a._teto=teto;
+    if(teto&&a._p<=teto){sin.push(`abaixo do teto Bazin (${brl(teto,2)})`);if(a._p<=teto*.9)out.urg.push(`${a.ticker}: ${brl(a._p,2)} — 10%+ abaixo do teto Bazin (${brl(teto,2)})`)}
+    if(a.tipo==='fii'&&a.vp_cota){const pv=a._p/a.vp_cota;if(pv<=P.pvp_barato_fii)sin.push(`P/VP ${pv.toFixed(2)}`)}
+    const closes=res&&res.historicalDataPrice?res.historicalDataPrice.map(x=>x.close).filter(x=>x!=null):null;
+    const r=rsi(closes);a._rsi=r;
+    if(r!=null&&r<=P.rsi_sobrevenda){sin.push(`RSI ${Math.round(r)} (sobrevenda)`);if(r<=P.rsi_urgente)out.urg.push(`${a.ticker}: RSI ${Math.round(r)} — sobrevenda forte`)}
+    if(sin.length)out.op.push(`${a.ticker} (${brl(a._p,2)}): ${sin.join('; ')}`);
+  }
+  for(const rf of carteira.renda_fixa){const pc=rf.valor/patr,dv=rf.meta_pct-pc;if(dv>=P.desvio_alerta)out.reb.push({t:rf.nome.split(' (')[0],pc,meta:rf.meta_pct,ap:dv*patr})}
+  out.reb.sort((x,y)=>(y.meta-y.pc)-(x.meta-x.pc));out.reb=out.reb.slice(0,3);
+  return out;
+}
+
+function render(an,falhas){
+  $('warns').innerHTML=falhas.length?`<div class="warn">Sem cotação ao vivo para: ${falhas.join(', ')}. Exibindo preço médio.</div>`:'';
+  const custo=carteira.ativos_bolsa.reduce((s,a)=>s+a.qtd*a.pm,0);
+  const res=an.patr-an.vrf-custo,cls=res>=0?'pos':'neg';
+  $('metrics').innerHTML=
+    `<div class="mcard"><div class="l">Patrimônio</div><div class="v">${brl(an.patr)}</div><div class="d">bolsa ${brl(an.patr-an.vrf)} · tesouro ${brl(an.vrf)}</div></div>`+
+    `<div class="mcard"><div class="l">Resultado na bolsa</div><div class="v ${cls}">${brl(res)}</div><div class="d ${cls}">${pct(res/custo)} sobre o custo</div></div>`;
+  let al='';
+  if(an.urg.length)al+=`<div class="al buy"><div class="h">Compre agora — sinal forte</div><ul>${an.urg.map(x=>`<li>${x}</li>`).join('')}</ul></div>`;
+  if(an.op.length)al+=`<div class="al op"><div class="h">Zona de compra — avalie</div><ul>${an.op.map(x=>`<li>${x}</li>`).join('')}</ul></div>`;
+  al+=an.reb.length
+    ?`<div class="al plan"><div class="h">Próximo aporte — nesta ordem</div><ul>${an.reb.map((r,i)=>`<li>${i+1}º <b>${r.t}</b>: compre ~${brl(r.ap)} (está em ${pct(r.pc)}, meta ${pct(r.meta,0)})</li>`).join('')}</ul></div>`
+    :`<div class="al plan"><div class="h">Alocação</div>Carteira dentro das metas. Nenhuma compra necessária hoje.</div>`;
+  $('alerts').innerHTML=al;
+  renderAssets(an);renderCharts(an);renderNews();renderEdit();
+}
+
+function renderAssets(an){
+  const grupos=[['acao','Ações'],['fii','Fundos imobiliários'],['etf','Renda variável global']];
+  let h='';
+  for(const[tipo,tit]of grupos){
+    const as=carteira.ativos_bolsa.filter(a=>a.tipo===tipo);if(!as.length)continue;
+    const sub=as.reduce((s,a)=>s+a._v,0);
+    h+=`<div class="gt"><b>${tit}</b> <span>· ${brl(sub)} (${pct(sub/an.patr)})</span></div><div class="tblw"><table><tr><th>Ativo</th><th>Qtd</th><th>PM</th><th>Atual</th><th>Posição</th><th>Var</th><th>%cart</th><th>Meta</th><th>Teto</th><th>RSI</th></tr>`;
+    for(const a of as){const v=(a._p-a.pm)/a.pm;
+      h+=`<tr><td>${a.ticker}</td><td>${a.qtd}</td><td>${a.pm.toFixed(2)}</td><td>${a._p.toFixed(2)}</td><td>${brl(a._v)}</td><td class="${v>=0?'pos':'neg'}">${pct(v)}</td><td>${pct(a._v/an.patr)}</td><td>${pct(a.meta_pct,0)}</td><td>${a._teto?a._teto.toFixed(2):'—'}</td><td>${a._rsi!=null?Math.round(a._rsi):'—'}</td></tr>`}
+    h+='</table></div>';
+  }
+  const vrf=an.vrf;
+  h+=`<div class="gt"><b>Tesouro Direto</b> <span>· ${brl(vrf)} (${pct(vrf/an.patr)})</span></div><div class="tblw"><table><tr><th>Título</th><th>Valor</th><th>Meta</th><th>%cart</th></tr>`;
+  for(const rf of carteira.renda_fixa)h+=`<tr><td>${rf.nome}</td><td>${brl(rf.valor,2)}</td><td>${pct(rf.meta_pct,0)}</td><td>${pct(rf.valor/an.patr)}</td></tr>`;
+  h+='</table></div>';
+  $('assets').innerHTML=h;
+}
+
+function renderCharts(an){
+  const labels=[],atual=[],meta=[];
+  for(const a of carteira.ativos_bolsa){labels.push(a.ticker);atual.push(+(a._v/an.patr*100).toFixed(2));meta.push(+(a.meta_pct*100).toFixed(2))}
+  for(const rf of carteira.renda_fixa){labels.push(rf.nome.split(' (')[0].replace('Tesouro ',''));atual.push(+(rf.valor/an.patr*100).toFixed(2));meta.push(+(rf.meta_pct*100).toFixed(2))}
+  if(charts.aloc)charts.aloc.destroy();
+  charts.aloc=new Chart($('ch-aloc'),{type:'bar',data:{labels,datasets:[
+    {label:'Atual (%)',data:atual,backgroundColor:'#4ADE80'},
+    {label:'Meta (%)',data:meta,backgroundColor:'#2D5A4A'}]},
+    options:{indexAxis:'y',responsive:true,plugins:{legend:{labels:{color:'#8FA89C'}}},
+    scales:{x:{ticks:{color:'#8FA89C'},grid:{color:'#24352E'}},y:{ticks:{color:'#E8F2ED'},grid:{display:false}}}}});
+  if(hist&&hist.length>1){
+    $('hist-box').classList.remove('hide');
+    if(charts.hist)charts.hist.destroy();
+    charts.hist=new Chart($('ch-hist'),{type:'line',data:{labels:hist.map(x=>x[0].slice(5)),datasets:[{data:hist.map(x=>x[1]),borderColor:'#4ADE80',backgroundColor:'rgba(74,222,128,.12)',fill:true,tension:.25,pointRadius:0}]},
+      options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8FA89C',maxTicksLimit:6},grid:{display:false}},y:{ticks:{color:'#8FA89C'},grid:{color:'#24352E'}}}}});
+  }
+}
+
+function renderNews(){
+  if(!noticias){$('news').innerHTML='<p class="cap">Notícias aparecem após a próxima execução do agente diário.</p>';return}
+  let h='';
+  for(const a of carteira.ativos_bolsa){
+    const ns=noticias[a.ticker]||[];if(!ns.length)continue;
+    h+=`<details><summary>${a.ticker}${a.nome?' — '+a.nome:''}</summary>`;
+    for(const n of ns)h+=`<div class="nt"><a href="${n.link}" target="_blank" rel="noopener">${n.titulo}</a><div class="f">${n.fonte||''}</div></div>`;
+    h+='</details>';
+  }
+  h+=`<p class="cap">Notícias atualizadas em ${(noticias._atualizado||'').replace('T',' às ')}</p>`;
+  $('news').innerHTML=h;
+}
+
+function renderEdit(){
+  let h='<div class="tblw"><table><tr><th>Ativo</th><th>Qtd</th><th>PM</th><th>Meta %</th></tr>';
+  carteira.ativos_bolsa.forEach((a,i)=>{h+=`<tr><td>${a.ticker}</td><td><input id="e-q-${i}" type="number" step="any" value="${a.qtd}"></td><td><input id="e-p-${i}" type="number" step="0.01" value="${a.pm}"></td><td><input id="e-m-${i}" type="number" step="0.1" value="${(a.meta_pct*100).toFixed(1)}"></td></tr>`});
+  h+='</table></div><div class="tblw"><table><tr><th>Título</th><th>Valor</th><th>Meta %</th></tr>';
+  carteira.renda_fixa.forEach((rf,i)=>{h+=`<tr><td>${rf.nome}</td><td><input id="e-rv-${i}" type="number" step="0.01" value="${rf.valor}"></td><td><input id="e-rm-${i}" type="number" step="0.1" value="${(rf.meta_pct*100).toFixed(1)}"></td></tr>`});
+  h+='</table></div>';
+  $('edit-area').innerHTML=h;
+}
+
+async function saveCarteira(){
+  try{
+    let soma=0;
+    carteira.ativos_bolsa.forEach((a,i)=>{a.qtd=parseFloat($(`e-q-${i}`).value)||a.qtd;a.pm=parseFloat($(`e-p-${i}`).value)||a.pm;a.meta_pct=Math.round((parseFloat($(`e-m-${i}`).value)||0)*10)/1000;soma+=a.meta_pct});
+    carteira.renda_fixa.forEach((rf,i)=>{rf.valor=parseFloat($(`e-rv-${i}`).value)||rf.valor;rf.meta_pct=Math.round((parseFloat($(`e-rm-${i}`).value)||0)*10)/1000;soma+=rf.meta_pct});
+    $('soma-metas').textContent=Math.abs(soma-1)>.005?`Atenção: metas somam ${pct(soma,1)} (ideal 100%)`:'';
+    const limpa=JSON.parse(JSON.stringify(carteira));
+    for(const a of limpa.ativos_bolsa)for(const k of Object.keys(a))if(k.startsWith('_')&&k!=='_nota')delete a[k];
+    await ghPut('carteira.json',JSON.stringify(limpa,null,2),'Atualiza carteira via app');
+    toast('Carteira salva no GitHub');
+    refresh(true);
+  }catch(e){toast('Falha ao salvar: '+e.message)}
+}
+
+async function runIA(){
+  if(!cfg.gem){toast('Configure a chave Gemini em ⚙');return}
+  const btn=$('bt-ia');btn.disabled=true;btn.textContent='Analisando...';
+  try{
+    const an=analisar();
+    const cacheK='mc_ia_'+new Date().toISOString().slice(0,10)+'_'+Math.round(an.patr);
+    let out=localStorage.getItem(cacheK);
+    if(!out){
+      const pos=carteira.ativos_bolsa.map(a=>`${a.ticker} (${a.tipo}): ${a.qtd} un, PM R$ ${a.pm.toFixed(2)}, atual R$ ${a._p.toFixed(2)}, ${pct(a._v/an.patr)} da carteira (meta ${pct(a.meta_pct,0)})`).join('\n');
+      let man='';
+      if(noticias)for(const a of carteira.ativos_bolsa)for(const n of(noticias[a.ticker]||[]))man+=`[${a.ticker}] ${n.titulo}\n`;
+      const prompt=`Voce e um analista de investimentos focado em dividendos, value investing e buy-and-hold, analisando a carteira de um investidor brasileiro.\n\nCARTEIRA:\n${pos}\nTesouro Direto: ${brl(an.vrf)}.\n\nNOTICIAS RECENTES:\n${man}\nEm portugues, organizado e direto (max. 300 palavras):\n1. Saude geral da carteira (diversificacao, concentracao, pontos fortes).\n2. O que ha de relevante nas noticias para estes ativos.\n3. Pontos de atencao ou estudo (sem recomendar compra/venda especifica).\nLembre o leitor de que isto e apoio a decisao, nao recomendacao.`;
+      out=await gemini(prompt);
+      localStorage.setItem(cacheK,out);
+      for(const k of Object.keys(localStorage))if(k.startsWith('mc_ia_')&&k!==cacheK)localStorage.removeItem(k);
+    }
+    const el=$('ia-out');el.classList.remove('hide');
+    el.innerHTML=out.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+  }catch(e){toast(e.message)}
+  btn.disabled=false;btn.textContent='Gerar análise da carteira com IA';
+}
+
+async function gemini(prompt){
+  let ultimo='';
+  for(const m of['gemini-flash-latest','gemini-flash-lite-latest','gemini-2.5-flash','gemini-2.5-flash-lite']){
+    for(let t=0;t<2;t++){
+      try{
+        const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${cfg.gem}`,
+          {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})});
+        if(r.status===200){const j=await r.json();return j.candidates[0].content.parts[0].text.trim()}
+        ultimo=`HTTP ${r.status}`;
+        if([429,500,503].includes(r.status)){await new Promise(s=>setTimeout(s,3500));continue}
+        break;
+      }catch(e){ultimo=e.message;break}
+    }
+  }
+  throw new Error(`Gemini indisponível (${ultimo}). Tente em alguns minutos.`);
+}
+
+async function refresh(force){
+  if(!cfg.repo||!cfg.gh){openCfg();return}
+  $('sub').textContent='atualizando...';
+  try{
+    const cj=await ghGet('carteira.json');
+    if(!cj)throw new Error('Não li o carteira.json — confira repo e token em ⚙');
+    carteira=JSON.parse(cj.text);
+    const hc=await ghGet('historico.csv');
+    hist=hc?hc.text.trim().split('\n').slice(1).map(l=>{const[a,b]=l.split(',');return[a,parseFloat(b)]}):null;
+    const nj=await ghGet('noticias.json');
+    noticias=nj?JSON.parse(nj.text):null;
+    const falhas=[];
+    await Promise.all(carteira.ativos_bolsa.map(async a=>{const q=await quote(a.ticker);if(q)quotes[a.ticker]=q;else falhas.push(a.ticker)}));
+    render(analisar(),falhas);
+    $('sub').textContent='atualizado '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){$('sub').textContent='erro';toast(e.message)}
+}
+
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+if(!cfg.repo||!cfg.gh)openCfg();
+else if(cfg.pin&&sessionStorage.getItem('mc_ok')!=='1')show('scr-pin');
+else{show('scr-app');refresh(false)}
+</script>
+</body>
+</html>

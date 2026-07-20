@@ -110,6 +110,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
     <img src="icone-192.png" alt="">
     <div><div class="t">Minha Carteira</div><div class="s" id="sub">renda passiva em construção</div></div>
     <div class="sp"></div>
+    <button class="sec" onclick="exportarPDF()" aria-label="Exportar PDF">📄</button>
     <button class="sec" onclick="sair()" aria-label="Bloquear">🔒</button>
     <button class="sec" onclick="openCfg()" aria-label="Configurações">⚙</button>
     <button onclick="refresh(true)">Atualizar</button>
@@ -117,7 +118,25 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div id="warns"></div>
   <div class="mgrid" id="metrics"></div>
   <div id="alerts"></div>
+  <h2>Simular aporte</h2>
+  <div class="chart-box">
+    <div style="display:flex;gap:8px">
+      <input id="sim-v" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="50000" value="500,00">
+      <button onclick="simularAporte()" style="flex-shrink:0">Calcular</button>
+    </div>
+    <div id="sim-out"></div>
+  </div>
   <div id="renda"></div>
+  <h2>Projeção bola de neve</h2>
+  <div class="chart-box">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><label style="margin-top:0">Aporte mensal (R$)</label><input id="pj-a" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="40000" value="400,00"></div>
+      <div><label style="margin-top:0">Meta de renda mensal (R$)</label><input id="pj-m" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="100000" value="1.000,00"></div>
+    </div>
+    <button onclick="projetar()" style="margin-top:10px;width:100%">Projetar</button>
+    <div id="pj-out"></div>
+    <div style="position:relative"><canvas id="ch-pj" class="hide" height="170"></canvas></div>
+  </div>
   <div class="chart-box hide" id="hist-box"><div class="gt" style="margin:0 0 6px"><b>Evolução do patrimônio</b></div><canvas id="ch-hist" height="150"></canvas></div>
   <h2>Alocação: atual × meta</h2>
   <div id="aloc"></div>
@@ -141,6 +160,8 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
 <div id="jserr" class="warn hide" style="border-color:#7C2D12;background:#24160F;color:#FDBA74"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script>
 window.onerror=function(msg,src,line){
   var e=document.getElementById('jserr');
@@ -150,7 +171,7 @@ window.onerror=function(msg,src,line){
 const $=id=>document.getElementById(id);
 const LSK='mc_cfg';
 let cfg=JSON.parse(localStorage.getItem(LSK)||'{}');
-let carteira=null,quotes={},hist=null,noticias=null,indic=null,prov=null,charts={};
+let carteira=null,quotes={},hist=null,noticias=null,indic=null,prov=null,charts={},lastAn=null,gYield=0;
 
 const brl=(v,d=0)=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
 const num2=v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -230,7 +251,78 @@ function analisar(){
   return out;
 }
 
+function simularAporte(){
+  const v=moneyVal($('sim-v'));
+  if(!v){toast('Informe o valor do aporte');return}
+  if(!lastAn){toast('Aguarde carregar a carteira');return}
+  const an=lastAn;
+  const cand=[];
+  for(const a of carteira.ativos_bolsa){
+    const dvv=a.meta_pct-(a._v/an.patr);
+    if(dvv>0)cand.push({t:a.ticker,d:dvv,p:a._p,zona:!!(a._teto&&a._p<=a._teto)});
+  }
+  for(const rf of carteira.renda_fixa){
+    const dvv=rf.meta_pct-rf.valor/an.patr;
+    if(dvv>0)cand.push({t:rf.nome.split(' (')[0],d:dvv,p:null,zona:false});
+  }
+  if(!cand.length){$('sim-out').innerHTML='<p class="cap">Carteira dentro das metas — aporte livre (sugestão: Tesouro ou o ativo mais barato pelo teto Bazin).</p>';return}
+  const somaD=cand.reduce((s,c)=>s+c.d,0);
+  let sobra=0;const plano=[];
+  for(const c of cand){
+    const alvo=v*c.d/somaD;
+    if(c.p){
+      const n=Math.floor(alvo/c.p);
+      sobra+=alvo-n*c.p;
+      if(n>0)plano.push({t:c.t,n,gasto:n*c.p,zona:c.zona});
+    }else plano.push({t:c.t,n:null,gasto:alvo,zona:false});
+  }
+  // sobra das cotas inteiras vai para o primeiro item fracionavel (Tesouro)
+  const frac=plano.find(x=>x.n===null);
+  if(frac)frac.gasto+=sobra; else if(sobra>0.01)plano.push({t:'Caixa (sobra)',n:null,gasto:sobra,zona:false});
+  const totalGasto=plano.reduce((s,x)=>s+x.gasto,0);
+  $('sim-out').innerHTML='<div style="margin-top:12px">'+plano.map(x=>
+    `<div class="alab" style="margin:8px 0"><b>${x.t}${x.zona?' <span class="chip">ZONA DE COMPRA</span>':''}</b>`
+    +`<span>${x.n!==null?`<b>${x.n} ${x.n>1?'cotas':'cota'}</b> · `:''}<b>${brl(x.gasto,2)}</b></span></div>`).join('')
+    +`<p class="cap">Total alocado: ${brl(totalGasto,2)} de ${brl(v,2)} · distribuição pelos ativos mais distantes da meta.</p></div>`;
+}
+
+function projetar(){
+  const ap=moneyVal($('pj-a')),meta=moneyVal($('pj-m'));
+  if(!lastAn){toast('Aguarde carregar a carteira');return}
+  if(!gYield){toast('Sem histórico de renda ainda para basear a projeção');return}
+  localStorage.setItem('mc_pj',JSON.stringify({a:$('pj-a').dataset.raw,m:$('pj-m').dataset.raw}));
+  let P=lastAn.patr;const serie=[];let atinge=null;
+  for(let m=1;m<=120;m++){
+    P=P*(1+gYield)+ap;
+    const renda=P*gYield;
+    serie.push(renda);
+    if(!atinge&&renda>=meta)atinge=m;
+  }
+  const rendaHoje=lastAn.patr*gYield;
+  const anos=n=>n>=12?`${Math.floor(n/12)}a ${n%12}m`:`${n}m`;
+  $('pj-out').innerHTML=`<div class="mgrid3" style="margin-top:12px">
+    <div class="mcard"><div class="l">Renda hoje</div><div class="v">${brl(rendaHoje,0)}/mês</div></div>
+    <div class="mcard"><div class="l">Em 5 anos</div><div class="v pos">${brl(serie[59],0)}/mês</div></div>
+    <div class="mcard"><div class="l">Em 10 anos</div><div class="v pos">${brl(serie[119],0)}/mês</div></div>
+  </div>
+  <p class="cap">${atinge?`🎯 Meta de ${brl(meta,0)}/mês alcançada em ~${anos(atinge)}`
+    :`Meta de ${brl(meta,0)}/mês não alcançada em 10 anos — aumente o aporte ou o prazo`}
+   · yield atual ${(gYield*100).toFixed(2)}%/mês, reinvestindo tudo. Projeção simplificada (yield constante, sem inflação).</p>`;
+  if(typeof Chart!=='undefined'){
+    $('ch-pj').classList.remove('hide');
+    if(charts.pj)charts.pj.destroy();
+    const labels=serie.map((_,i)=>i+1);
+    charts.pj=new Chart($('ch-pj'),{type:'line',data:{labels,
+      datasets:[{data:serie,borderColor:'#4ADE80',backgroundColor:'rgba(74,222,128,.10)',fill:true,tension:.3,pointRadius:0},
+        {data:serie.map(()=>meta),borderColor:'#93C5FD',borderDash:[6,5],pointRadius:0,fill:false}]},
+      options:{responsive:true,plugins:{legend:{display:false}},
+        scales:{x:{title:{display:true,text:'meses',color:'#8FA89C'},ticks:{color:'#8FA89C',maxTicksLimit:7},grid:{display:false}},
+          y:{ticks:{color:'#8FA89C'},grid:{color:'#24352E'}}}}});
+  }
+}
+
 function render(an,falhas){
+  lastAn=an;
   $('warns').innerHTML=falhas.length?`<div class="warn">Sem cotação ao vivo para: ${falhas.join(', ')}. Exibindo preço médio.</div>`:'';
   const custo=carteira.ativos_bolsa.reduce((s,a)=>s+a.qtd*a.pm,0);
   const res=an.patr-an.vrf-custo,cls=res>=0?'pos':'neg';
@@ -361,6 +453,7 @@ function renderRenda(){
 
   const custoBolsa=carteira.ativos_bolsa.reduce((s,a)=>s+a.qtd*a.pm,0)
     +carteira.renda_fixa.reduce((s,r)=>s+r.valor,0);
+  gYield=custoBolsa>0?(tot/nAno)/custoBolsa:0;
   const hoje=new Date().toISOString().slice(0,10);
   const opts=carteira.ativos_bolsa.map(a=>`<option>${a.ticker}</option>`).join('')+'<option>Tesouro</option>';
   $('renda').innerHTML=`<h2>Renda passiva</h2>
@@ -508,6 +601,96 @@ async function refresh(force){
     $('sub').textContent='atualizado '+new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   }catch(e){$('sub').textContent='erro';toast(e.message)}
 }
+
+async function exportarPDF(){
+  if(!lastAn||!carteira){toast('Aguarde carregar a carteira');return}
+  if(typeof window.jspdf==='undefined'){toast('Biblioteca de PDF bloqueada pelo navegador/adblock');return}
+  const an=lastAn,{jsPDF}=window.jspdf,doc=new jsPDF();
+  const W=210,hoje=new Date().toLocaleDateString('pt-BR');
+  const VERDE=[15,42,33],MINT=[22,163,74],CINZA=[95,110,102];
+
+  // Cabecalho
+  doc.setFillColor(...VERDE);doc.rect(0,0,W,30,'F');
+  doc.setTextColor(255,255,255);doc.setFontSize(18);doc.setFont(undefined,'bold');
+  doc.text('Minha Carteira',14,13);
+  doc.setFontSize(10);doc.setFont(undefined,'normal');
+  doc.text('Relatório de investimentos',14,20);
+  doc.text(hoje,W-14,13,{align:'right'});
+
+  // Cards de resumo
+  const custo=carteira.ativos_bolsa.reduce((s,a)=>s+a.qtd*a.pm,0);
+  const res=an.patr-an.vrf-custo;
+  const ev=(prov&&prov.eventos)||[];
+  const ano=String(new Date().getFullYear());
+  const rendaAno=ev.filter(e=>e.data.startsWith(ano)).reduce((s,e)=>s+e.valor,0);
+  const cards=[['Patrimônio',brl(an.patr,2)],['Resultado na bolsa',brl(res,2)],
+    ['Renda passiva no ano',brl(rendaAno,2)],['Yield médio',(gYield*100).toFixed(2)+'%/mês']];
+  let x=14;
+  for(const[l,v]of cards){
+    doc.setFillColor(241,247,244);doc.roundedRect(x,36,44,18,2,2,'F');
+    doc.setTextColor(...CINZA);doc.setFontSize(6.5);doc.text(l.toUpperCase(),x+3,42);
+    doc.setTextColor(20,35,28);doc.setFontSize(10);doc.setFont(undefined,'bold');
+    doc.text(v,x+3,49);doc.setFont(undefined,'normal');
+    x+=46.5;
+  }
+
+  // Tabela de ativos
+  const NOME_G={acao:'Ação',fii:'FII',etf:'ETF'};
+  const corpo=carteira.ativos_bolsa.map(a=>[a.ticker,NOME_G[a.tipo]||'',String(a.qtd),
+    num2(a.pm),num2(a._p),brl(a._v,2),pct((a._p-a.pm)/a.pm),pct(a._v/an.patr),pct(a.meta_pct,0)]);
+  for(const rf of carteira.renda_fixa)corpo.push([rf.nome,'Tesouro','—','—','—',brl(rf.valor,2),'—',pct(rf.valor/an.patr),pct(rf.meta_pct,0)]);
+  doc.autoTable({startY:60,head:[['Ativo','Tipo','Qtd','PM','Atual','Posição','Var','% cart','Meta']],
+    body:corpo,styles:{fontSize:7.5,cellPadding:1.8},
+    headStyles:{fillColor:VERDE,textColor:255,fontSize:7.5},
+    alternateRowStyles:{fillColor:[241,247,244]},margin:{left:14,right:14}});
+
+  // Renda mensal
+  let y=doc.lastAutoTable.finalY+8;
+  const porMes={};for(const e of ev){const k=e.data.slice(0,7);porMes[k]=(porMes[k]||0)+e.valor}
+  const MN=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const meses=Object.keys(porMes).sort();
+  if(meses.length){
+    doc.setTextColor(20,35,28);doc.setFontSize(11);doc.setFont(undefined,'bold');
+    doc.text('Renda passiva mensal',14,y);doc.setFont(undefined,'normal');
+    doc.autoTable({startY:y+3,head:[meses.map(m=>MN[+m.slice(5,7)-1]+'/'+m.slice(2,4))],
+      body:[meses.map(m=>brl(porMes[m],2))],styles:{fontSize:7.5,cellPadding:1.8,halign:'center'},
+      headStyles:{fillColor:MINT,textColor:255,fontSize:7.5},margin:{left:14,right:14}});
+    y=doc.lastAutoTable.finalY+8;
+  }
+
+  // A receber
+  const prevs=((prov&&prov.previstos)||[]).slice().sort((a,b)=>a.data.localeCompare(b.data));
+  if(prevs.length){
+    doc.setFontSize(11);doc.setFont(undefined,'bold');
+    doc.text('Proventos a receber',14,y);doc.setFont(undefined,'normal');
+    doc.autoTable({startY:y+3,head:[['Data','Ativo','Valor']],
+      body:prevs.map(p=>[p.data.split('-').reverse().join('/'),p.ticker,brl(p.valor,2)]),
+      styles:{fontSize:7.5,cellPadding:1.8},headStyles:{fillColor:VERDE,textColor:255,fontSize:7.5},
+      margin:{left:14,right:14}});
+    y=doc.lastAutoTable.finalY+8;
+  }
+
+  doc.setTextColor(...CINZA);doc.setFontSize(7);
+  doc.text('Gerado pelo app Minha Carteira · Cotações com ~15 min de atraso · Não é recomendação de investimento.',14,287);
+
+  const nome=`carteira-${new Date().toISOString().slice(0,10)}.pdf`;
+  const blob=doc.output('blob');
+  const file=new File([blob],nome,{type:'application/pdf'});
+  if(navigator.canShare&&navigator.canShare({files:[file]})){
+    try{await navigator.share({files:[file],title:'Minha Carteira'});return}catch(e){}
+  }
+  doc.save(nome);
+  toast('PDF salvo nos downloads');
+}
+
+// Restaura preferencias da projecao
+try{
+  const pj=JSON.parse(localStorage.getItem('mc_pj')||'null');
+  if(pj){
+    $('pj-a').dataset.raw=pj.a;$('pj-a').value=num2(parseInt(pj.a,10)/100);
+    $('pj-m').dataset.raw=pj.m;$('pj-m').value=num2(parseInt(pj.m,10)/100);
+  }
+}catch(e){}
 
 if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
 if(!cfg.repo||!cfg.gh)openCfg();

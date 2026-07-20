@@ -68,6 +68,20 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
 .center{display:flex;flex-direction:column;align-items:center;gap:14px;margin-top:14vh;text-align:center}
 .center img{width:76px;height:76px;border-radius:18px}
 .center input{max-width:280px;text-align:center}
+@media(max-width:460px){
+  .hdr{gap:8px}
+  .hdr img{width:34px;height:34px;border-radius:9px}
+  .hdr .t{font-size:1.05rem;white-space:nowrap}
+  .hdr .s{font-size:.64rem}
+  .hdr button{padding:8px 9px;font-size:.76rem}
+}
+.prow{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:11px 0;border-top:1px solid rgba(147,197,253,.16)}
+.prow:first-of-type{border-top:0}
+.prow .inf b{font-size:.92rem}
+.prow .inf .sub{font-size:.74rem;opacity:.75;margin-top:2px}
+.prow .rgt{text-align:right;flex-shrink:0}
+.prow .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:7px}
+.prow .acts .mini{margin-left:0}
 .arow{margin:11px 0}
 .alab{display:flex;justify-content:space-between;align-items:baseline;font-size:.78rem;margin-bottom:5px}
 .alab b{font-size:.85rem}
@@ -123,20 +137,28 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
     <div style="display:flex;gap:8px">
       <input id="sim-v" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="50000" value="500,00">
       <button onclick="simularAporte()" style="flex-shrink:0">Calcular</button>
+      <button class="sec" onclick="limparSim()" style="flex-shrink:0">Limpar</button>
+    </div>
+    <div style="display:flex;gap:16px;margin-top:10px;font-size:.82rem;color:var(--tx)">
+      <label style="margin:0;display:flex;gap:6px;align-items:center"><input type="radio" name="sim-m" value="renda" checked style="width:auto">Foco em renda</label>
+      <label style="margin:0;display:flex;gap:6px;align-items:center"><input type="radio" name="sim-m" value="metas" style="width:auto">Seguir metas</label>
     </div>
     <div id="sim-out"></div>
   </div>
-  <div id="renda"></div>
   <h2>Projeção bola de neve</h2>
   <div class="chart-box">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div><label style="margin-top:0">Aporte mensal (R$)</label><input id="pj-a" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="40000" value="400,00"></div>
       <div><label style="margin-top:0">Meta de renda mensal (R$)</label><input id="pj-m" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="100000" value="1.000,00"></div>
     </div>
-    <button onclick="projetar()" style="margin-top:10px;width:100%">Projetar</button>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button onclick="projetar()" style="flex:1">Projetar</button>
+      <button class="sec" onclick="limparPj()">Limpar</button>
+    </div>
     <div id="pj-out"></div>
     <div style="position:relative"><canvas id="ch-pj" class="hide" height="170"></canvas></div>
   </div>
+  <div id="renda"></div>
   <div class="chart-box hide" id="hist-box"><div class="gt" style="margin:0 0 6px"><b>Evolução do patrimônio</b></div><canvas id="ch-hist" height="150"></canvas></div>
   <h2>Alocação: atual × meta</h2>
   <div id="aloc"></div>
@@ -171,7 +193,7 @@ window.onerror=function(msg,src,line){
 const $=id=>document.getElementById(id);
 const LSK='mc_cfg';
 let cfg=JSON.parse(localStorage.getItem(LSK)||'{}');
-let carteira=null,quotes={},hist=null,noticias=null,indic=null,prov=null,charts={},lastAn=null,gYield=0;
+let carteira=null,quotes={},hist=null,noticias=null,indic=null,prov=null,charts={},lastAn=null,gYield=0,gYieldMap={};
 
 const brl=(v,d=0)=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
 const num2=v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -259,39 +281,87 @@ function analisar(){
   return out;
 }
 
+function limparSim(){$('sim-out').innerHTML=''}
+function limparPj(){$('pj-out').innerHTML='';if(charts.pj){charts.pj.destroy();charts.pj=null}$('ch-pj').classList.add('hide')}
+
+function yieldAtivo(a){
+  // yield mensal estimado: historico real de proventos; senao, dividendos 12m / preco
+  if(gYieldMap[a.ticker])return gYieldMap[a.ticker];
+  const d=indic&&indic[a.ticker]&&indic[a.ticker].dividendos_12m;
+  if(d&&a._p)return (d/12)/a._p;
+  return 0;
+}
+
 function simularAporte(){
   const v=moneyVal($('sim-v'));
   if(!v){toast('Informe o valor do aporte');return}
   if(!lastAn){toast('Aguarde carregar a carteira');return}
   const an=lastAn;
-  const cand=[];
-  for(const a of carteira.ativos_bolsa){
-    const dvv=a.meta_pct-(a._v/an.patr);
-    if(dvv>0)cand.push({t:a.ticker,d:dvv,p:a._p,zona:!!(a._teto&&a._p<=a._teto)});
-  }
-  for(const rf of carteira.renda_fixa){
-    const dvv=rf.meta_pct-rf.valor/an.patr;
-    if(dvv>0)cand.push({t:rf.nome.split(' (')[0],d:dvv,p:null,zona:false});
-  }
-  if(!cand.length){$('sim-out').innerHTML='<p class="cap">Carteira dentro das metas — aporte livre (sugestão: Tesouro ou o ativo mais barato pelo teto Bazin).</p>';return}
-  const somaD=cand.reduce((s,c)=>s+c.d,0);
-  let sobra=0;const plano=[];
-  for(const c of cand){
-    const alvo=v*c.d/somaD;
-    if(c.p){
+  const modo=document.querySelector('input[name="sim-m"]:checked').value;
+  let plano=[],sobra=0,rodape='';
+
+  if(modo==='renda'){
+    // FOCO EM RENDA: prioriza geradoras de renda em zona de compra,
+    // peso proporcional ao yield mensal de cada uma
+    let cand=carteira.ativos_bolsa
+      .map(a=>({t:a.ticker,p:a._p,y:yieldAtivo(a),zona:!!(a._teto&&a._p<=a._teto)}))
+      .filter(c=>c.y>0&&c.zona);
+    if(!cand.length)cand=carteira.ativos_bolsa
+      .map(a=>({t:a.ticker,p:a._p,y:yieldAtivo(a),zona:false})).filter(c=>c.y>0);
+    if(!cand.length){toast('Sem dados de yield ainda — use o modo Seguir metas');return}
+    const somaY=cand.reduce((s,c)=>s+c.y,0);
+    sobra=0;
+    for(const c of cand){
+      const alvo=v*c.y/somaY;
       const n=Math.floor(alvo/c.p);
       sobra+=alvo-n*c.p;
-      if(n>0)plano.push({t:c.t,n,gasto:n*c.p,zona:c.zona});
-    }else plano.push({t:c.t,n:null,gasto:alvo,zona:false});
+      if(n>0)plano.push({t:c.t,n,gasto:n*c.p,zona:c.zona,y:c.y});
+    }
+    // sobra compra mais cotas de quem rende mais (enquanto couber)
+    for(const c of cand.slice().sort((a,b)=>b.y-a.y)){
+      while(sobra>=c.p){
+        const item=plano.find(x=>x.t===c.t);
+        if(item){item.n++;item.gasto+=c.p}else plano.push({t:c.t,n:1,gasto:c.p,zona:c.zona,y:c.y});
+        sobra-=c.p;
+      }
+    }
+    if(sobra>0.01)plano.push({t:'Caixa (some ao próximo aporte)',n:null,gasto:sobra,zona:false,y:0});
+    rodape='distribuição proporcional ao yield das geradoras de renda em zona de compra — renda passiva primeiro.';
+  }else{
+    // SEGUIR METAS: rebalanceamento classico (aporta no que ficou para tras)
+    const cand=[];
+    for(const a of carteira.ativos_bolsa){
+      const dvv=a.meta_pct-(a._v/an.patr);
+      if(dvv>0)cand.push({t:a.ticker,d:dvv,p:a._p,zona:!!(a._teto&&a._p<=a._teto)});
+    }
+    for(const rf of carteira.renda_fixa){
+      const dvv=rf.meta_pct-rf.valor/an.patr;
+      if(dvv>0)cand.push({t:rf.nome.split(' (')[0],d:dvv,p:null,zona:false});
+    }
+    if(!cand.length){$('sim-out').innerHTML='<p class="cap">Carteira dentro das metas — aporte livre.</p>';return}
+    const somaD=cand.reduce((s,c)=>s+c.d,0);
+    for(const c of cand){
+      const alvo=v*c.d/somaD;
+      if(c.p){
+        const n=Math.floor(alvo/c.p);
+        sobra+=alvo-n*c.p;
+        if(n>0)plano.push({t:c.t,n,gasto:n*c.p,zona:c.zona});
+      }else plano.push({t:c.t,n:null,gasto:alvo,zona:false});
+    }
+    const frac=plano.find(x=>x.n===null);
+    if(frac)frac.gasto+=sobra;else if(sobra>0.01)plano.push({t:'Caixa (sobra)',n:null,gasto:sobra,zona:false});
+    rodape='distribuição pelos ativos mais distantes da meta (rebalanceamento).';
   }
-  // sobra das cotas inteiras vai para o primeiro item fracionavel (Tesouro)
-  const frac=plano.find(x=>x.n===null);
-  if(frac)frac.gasto+=sobra; else if(sobra>0.01)plano.push({t:'Caixa (sobra)',n:null,gasto:sobra,zona:false});
+
   const totalGasto=plano.reduce((s,x)=>s+x.gasto,0);
+  const rendaExtra=plano.reduce((s,x)=>s+(x.y?x.gasto*x.y:0),0);
   $('sim-out').innerHTML='<div style="margin-top:12px">'+plano.map(x=>
     `<div class="alab" style="margin:8px 0"><b>${x.t}${x.zona?' <span class="chip">ZONA DE COMPRA</span>':''}</b>`
-    +`<span>${x.n!==null?`<b>${x.n} ${x.n>1?'cotas':'cota'}</b> · `:''}<b>${brl(x.gasto,2)}</b></span></div>`).join('')
-    +`<p class="cap">Total alocado: ${brl(totalGasto,2)} de ${brl(v,2)} · distribuição pelos ativos mais distantes da meta.</p></div>`;
+    +`<span>${x.n!==null?`<b>${x.n} ${x.n>1?'cotas':'cota'}</b> · `:''}<b>${brl(x.gasto,2)}</b>`
+    +`${x.y?` <span style="opacity:.65">(~${(x.y*100).toFixed(2)}%/mês)</span>`:''}</span></div>`).join('')
+    +`<p class="cap">Total alocado: ${brl(totalGasto,2)} de ${brl(v,2)}`
+    +(rendaExtra>0?` · renda extra estimada: <b>+${brl(rendaExtra,2)}/mês</b>`:'')
+    +` · ${rodape}</p></div>`;
 }
 
 function projetar(){
@@ -440,6 +510,7 @@ function renderRenda(){
     const meses_t=Math.max(1,(hoje_d-new Date(primeiro[t]))/2629800000);
     yieldM[t]=c>0?(porAt[t]/meses_t)/c:0;
   }
+  gYieldMap=yieldM;
   const ats=Object.entries(porAt).sort((a,b)=>(yieldM[b[0]]||0)-(yieldM[a[0]]||0));
   const mxy=ats.length?Math.max(...ats.map(([t])=>yieldM[t]||0)):1;
   const rows=ats.map(([t,v])=>{
@@ -453,11 +524,13 @@ function renderRenda(){
   const somaPrev=prevs.reduce((s,e)=>s+e.valor,0);
   const prevRows=prevs.map(e=>{
     const c=custoDe(e.ticker);
-    const pctPos=c>0?` <span style="opacity:.75">(${(e.valor/c*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}% da posição)</span>`:'';
-    return `<div class="alab" style="margin:9px 0"><b>${e.ticker}</b><span>${e.data.split('-').reverse().join('/')} · <b>${brl(e.valor,2)}</b>${pctPos}`
+    const pctPos=c>0?` · ${(e.valor/c*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}% da posição`:'';
+    return `<div class="prow"><div class="inf"><b>${e.ticker}</b>`
+    +`<div class="sub">${e.data.split('-').reverse().join('/')}${pctPos}</div></div>`
+    +`<div class="rgt"><b>${brl(e.valor,2)}</b><div class="acts">`
     +`<button class="mini" onclick="recProv(${e.id})" title="Confirmar recebido">✔</button>`
     +`<button class="mini" onclick="editProv(${e.id})" title="Editar">✎</button>`
-    +`<button class="mini" onclick="delProv(${e.id})" title="Excluir">🗑</button></span></div>`;}).join('');
+    +`<button class="mini" onclick="delProv(${e.id})" title="Excluir">🗑</button></div></div></div>`;}).join('');
 
   const custoBolsa=carteira.ativos_bolsa.reduce((s,a)=>s+a.qtd*a.pm,0)
     +carteira.renda_fixa.reduce((s,r)=>s+r.valor,0);
@@ -527,11 +600,28 @@ function renderNews(){
 function renderEdit(){
   const money=(id,v,w)=>`<input id="${id}" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="${Math.round(v*100)}" value="${num2(v)}"${w?` style="width:${w}px"`:''}>`;
   let h='<div class="tblw"><table><tr><th>Ativo</th><th>Qtd</th><th>PM (R$)</th><th>Meta %</th></tr>';
-  carteira.ativos_bolsa.forEach((a,i)=>{h+=`<tr><td>${a.ticker}</td><td><input id="e-q-${i}" type="number" step="any" value="${a.qtd}"></td><td>${money(`e-p-${i}`,a.pm)}</td><td><input id="e-m-${i}" type="number" step="0.1" value="${(a.meta_pct*100).toFixed(1)}"></td></tr>`});
+  carteira.ativos_bolsa.forEach((a,i)=>{h+=`<tr><td>${a.ticker}</td><td><input id="e-q-${i}" type="number" step="any" value="${a.qtd}"></td><td>${money(`e-p-${i}`,a.pm)}</td><td><input id="e-m-${i}" type="number" step="0.1" value="${(a.meta_pct*100).toFixed(1)}" oninput="calcMetas()"></td></tr>`});
   h+='</table></div><div class="tblw"><table><tr><th>Título</th><th>Valor (R$)</th><th>Meta %</th></tr>';
-  carteira.renda_fixa.forEach((rf,i)=>{h+=`<tr><td>${rf.nome}</td><td>${money(`e-rv-${i}`,rf.valor,100)}</td><td><input id="e-rm-${i}" type="number" step="0.1" value="${(rf.meta_pct*100).toFixed(1)}"></td></tr>`});
-  h+='</table></div>';
+  carteira.renda_fixa.forEach((rf,i)=>{h+=`<tr><td>${rf.nome}</td><td>${money(`e-rv-${i}`,rf.valor,100)}</td><td><input id="e-rm-${i}" type="number" step="0.1" value="${(rf.meta_pct*100).toFixed(1)}" oninput="calcMetas()"></td></tr>`});
+  h+='</table></div><div id="soma-live" style="font-size:.85rem;font-weight:700;margin-top:8px"></div>';
   $('edit-area').innerHTML=h;
+  calcMetas();
+}
+
+function calcMetas(){
+  let soma=0;
+  carteira.ativos_bolsa.forEach((a,i)=>{soma+=parseFloat($(`e-m-${i}`).value)||0});
+  carteira.renda_fixa.forEach((rf,i)=>{soma+=parseFloat($(`e-rm-${i}`).value)||0});
+  const el=$('soma-live');if(!el)return;
+  const dif=soma-100;
+  if(Math.abs(dif)<=0.5){
+    el.style.color='#4ADE80';
+    el.textContent=`Total das metas: ${soma.toLocaleString('pt-BR',{maximumFractionDigits:1})}% ✓`;
+  }else{
+    el.style.color='#EF9F27';
+    el.textContent=`Total das metas: ${soma.toLocaleString('pt-BR',{maximumFractionDigits:1})}% — `
+      +(dif>0?`reduza ${dif.toLocaleString('pt-BR',{maximumFractionDigits:1})} p.p.`:`faltam ${(-dif).toLocaleString('pt-BR',{maximumFractionDigits:1})} p.p.`);
+  }
 }
 
 async function saveCarteira(){
@@ -556,10 +646,31 @@ async function runIA(){
     const cacheK='mc_ia_'+new Date().toISOString().slice(0,10)+'_'+Math.round(an.patr);
     let out=localStorage.getItem(cacheK);
     if(!out){
-      const pos=carteira.ativos_bolsa.map(a=>`${a.ticker} (${a.tipo}): ${a.qtd} un, PM R$ ${a.pm.toFixed(2)}, atual R$ ${a._p.toFixed(2)}, ${pct(a._v/an.patr)} da carteira (meta ${pct(a.meta_pct,0)})`).join('\n');
+      const pos=carteira.ativos_bolsa.map(a=>{
+        const y=yieldAtivo(a);
+        return `${a.ticker} (${a.tipo}): ${a.qtd} un, PM R$ ${a.pm.toFixed(2)}, atual R$ ${a._p.toFixed(2)}, `
+        +`posicao ${brl(a._v,2)} (${pct(a._v/an.patr)} da carteira, meta ${pct(a.meta_pct,0)}), `
+        +`teto Bazin ${a._teto?'R$ '+a._teto.toFixed(2)+(a._p<=a._teto?' (ABAIXO do teto)':''):'n/d'}, `
+        +`RSI ${a._rsi!=null?Math.round(a._rsi):'n/d'}, yield ~${(y*100).toFixed(2)}%/mes`;
+      }).join('\n');
+      const ev=(prov&&prov.eventos)||[];
+      const ano=String(new Date().getFullYear());
+      const rendaAno=ev.filter(e=>e.data.startsWith(ano)).reduce((s,e)=>s+e.valor,0);
+      const aReceber=((prov&&prov.previstos)||[]).map(p=>`${p.data} ${p.ticker} ${brl(p.valor,2)}`).join('; ')||'nenhum';
       let man='';
       if(noticias)for(const a of carteira.ativos_bolsa)for(const n of(noticias[a.ticker]||[]))man+=`[${a.ticker}] ${n.titulo}\n`;
-      const prompt=`Voce e um analista de investimentos focado em dividendos, value investing e buy-and-hold, analisando a carteira de um investidor brasileiro.\n\nCARTEIRA:\n${pos}\nTesouro Direto: ${brl(an.vrf)}.\n\nNOTICIAS RECENTES:\n${man}\nEm portugues, organizado e direto (max. 300 palavras):\n1. Saude geral da carteira (diversificacao, concentracao, pontos fortes).\n2. O que ha de relevante nas noticias para estes ativos.\n3. Pontos de atencao ou estudo (sem recomendar compra/venda especifica).\nLembre o leitor de que isto e apoio a decisao, nao recomendacao.`;
+      const prompt=`Voce e um analista de investimentos focado em GERACAO DE RENDA PASSIVA (dividendos, value investing, buy-and-hold), analisando a carteira de um investidor brasileiro cujo objetivo declarado e maximizar a renda passiva mensal o quanto antes, com prudencia.\n\n`
+      +`CARTEIRA (patrimonio total ${brl(an.patr,2)}):\n${pos}\n`
+      +`Tesouro Direto: ${brl(an.vrf,2)} (IPCA+ 2074 meta 13%, Selic 2028 meta 7%).\n\n`
+      +`RENDA PASSIVA: ${brl(rendaAno,2)} no ano, yield medio da carteira ${(gYield*100).toFixed(2)}%/mes sobre o custo.\n`
+      +`PROVENTOS A RECEBER: ${aReceber}.\n\n`
+      +`NOTICIAS RECENTES:\n${man}\n`
+      +`Em portugues, organizado e direto (max. 400 palavras):\n`
+      +`1. Saude da carteira sob a otica de renda: quem gera renda de verdade, quem esta ocioso, concentracoes.\n`
+      +`2. Noticias relevantes para a tese de renda destes ativos.\n`
+      +`3. METAS DE ALOCACAO: avalie os percentuais-meta atuais frente ao objetivo de renda passiva e, SE fizer sentido, sugira ajustes percentuais especificos por ativo (ex.: "considerar meta de X% em Y porque..."), mantendo diversificacao prudente e somando 100%. Se as metas estiverem adequadas, diga.\n`
+      +`4. Pontos de atencao.\n`
+      +`Feche lembrando que isto e apoio a decisao, nao recomendacao, e que mudancas de meta merecem conversa com o assessor.`;
       out=await gemini(prompt);
       localStorage.setItem(cacheK,out);
       for(const k of Object.keys(localStorage))if(k.startsWith('mc_ia_')&&k!==cacheK)localStorage.removeItem(k);

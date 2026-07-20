@@ -71,7 +71,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
 
 <div id="scr-cfg" class="hide">
   <div class="hdr"><img src="icone-192.png" alt=""><div><div class="t">Configuração</div><div class="s">feita uma vez, fica salva neste aparelho</div></div></div>
-  <label>Repositório privado (usuário/repo)</label><input id="c-repo" placeholder="leoncosta1980/agente-carteira">
+  <label>Repositório privado (usuário/repo)</label><input id="c-repo" value="leoncosta1980/agente-carteira">
   <label>Token do GitHub (fine-grained, Contents RW)</label><input id="c-gh" placeholder="github_pat_...">
   <label>Token da brapi</label><input id="c-brapi" placeholder="token brapi.dev">
   <label>Chave do Gemini (opcional, para análise IA)</label><input id="c-gem" placeholder="AIza...">
@@ -131,7 +131,16 @@ function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;setTimeou
 function show(id){for(const s of['scr-pin','scr-cfg','scr-app'])$(s).classList.add('hide');$(id).classList.remove('hide')}
 function showApp(){show('scr-app')}
 function openCfg(){$('c-repo').value=cfg.repo||'';$('c-gh').value=cfg.gh||'';$('c-brapi').value=cfg.brapi||'';$('c-gem').value=cfg.gem||'';$('c-pin').value=cfg.pin||'';show('scr-cfg')}
-function saveCfg(){cfg={repo:$('c-repo').value.trim(),gh:$('c-gh').value.trim(),brapi:$('c-brapi').value.trim(),gem:$('c-gem').value.trim(),pin:$('c-pin').value.trim()};localStorage.setItem(LSK,JSON.stringify(cfg));show('scr-app');refresh(true)}
+function saveCfg(){
+  const repo=$('c-repo').value.trim(),gh=$('c-gh').value.trim();
+  if(!repo||!repo.includes('/')){toast('Preencha o repositório no formato usuario/repo');return}
+  if(!gh){toast('Preencha o token do GitHub');return}
+  if(!$('c-brapi').value.trim()){toast('Preencha o token da brapi');return}
+  cfg={repo,gh,brapi:$('c-brapi').value.trim(),gem:$('c-gem').value.trim(),pin:$('c-pin').value.trim()};
+  localStorage.setItem(LSK,JSON.stringify(cfg));
+  sessionStorage.setItem('mc_ok','1');
+  show('scr-app');refresh(true);
+}
 function checkPin(){if($('pin-in').value===cfg.pin){sessionStorage.setItem('mc_ok','1');show('scr-app');refresh(false)}else toast('PIN incorreto')}
 
 const ghH=()=>({Authorization:'Bearer '+cfg.gh,Accept:'application/vnd.github+json'});

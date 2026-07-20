@@ -110,8 +110,15 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
 
 <div id="toast"></div>
 
+<div id="jserr" class="warn hide" style="border-color:#7C2D12;background:#24160F;color:#FDBA74"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
+window.onerror=function(msg,src,line){
+  var e=document.getElementById('jserr');
+  if(e){e.classList.remove('hide');e.textContent='Erro no app: '+msg+' (linha '+line+')'}
+  return false;
+};
 const $=id=>document.getElementById(id);
 const LSK='mc_cfg';
 let cfg=JSON.parse(localStorage.getItem(LSK)||'{}');
@@ -206,6 +213,10 @@ function renderAssets(an){
 }
 
 function renderCharts(an){
+  if(typeof Chart==='undefined'){
+    $('ch-aloc').parentElement.innerHTML='<p class="cap">Gráficos indisponíveis: biblioteca bloqueada pelo navegador/adblock (cdn.jsdelivr.net). Os dados acima continuam completos.</p>';
+    return;
+  }
   const labels=[],atual=[],meta=[];
   for(const a of carteira.ativos_bolsa){labels.push(a.ticker);atual.push(+(a._v/an.patr*100).toFixed(2));meta.push(+(a.meta_pct*100).toFixed(2))}
   for(const rf of carteira.renda_fixa){labels.push(rf.nome.split(' (')[0].replace('Tesouro ',''));atual.push(+(rf.valor/an.patr*100).toFixed(2));meta.push(+(rf.meta_pct*100).toFixed(2))}

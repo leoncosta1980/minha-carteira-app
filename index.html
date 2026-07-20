@@ -55,7 +55,8 @@ summary{font-weight:700;font-size:.88rem;cursor:pointer}
 details .nt{margin:10px 0}
 details .nt a{color:var(--mint);text-decoration:none;font-size:.84rem}
 details .nt .f{color:var(--mut);font-size:.72rem}
-input{background:var(--bg);border:1px solid var(--border);color:var(--tx);border-radius:8px;padding:8px 10px;font-size:.88rem;width:100%}
+input,select{background:var(--bg);border:1px solid var(--border);color:var(--tx);border-radius:8px;padding:8px 10px;font-size:.88rem;width:100%}
+button.mini{background:var(--card);color:var(--tx);border:1px solid var(--border);padding:4px 9px;font-size:.72rem;border-radius:8px;margin-left:4px}
 td input{width:76px;padding:5px 6px;text-align:right}
 label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
 .ia-out{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;font-size:.88rem;margin:8px 0;white-space:pre-wrap}
@@ -260,8 +261,47 @@ function renderAssets(an){
   $('assets').innerHTML=h;
 }
 
+let editandoProv=null;
+
+async function saveProvFile(){
+  prov._atualizado=new Date().toISOString().slice(0,10);
+  try{
+    await ghPut('proventos.json',JSON.stringify(prov,null,1),'Atualiza proventos via app');
+    toast('Proventos salvos');renderRenda();
+  }catch(e){toast('Falha ao salvar: '+e.message)}
+}
+function lancarProv(){
+  const v=moneyVal($('pv-v'));
+  if(!v){toast('Informe o valor');return}
+  if(!$('pv-d').value){toast('Informe a data');return}
+  prov.previstos=(prov.previstos||[]).filter(x=>x.id!==editandoProv);
+  const e={id:Date.now(),data:$('pv-d').value,ticker:$('pv-t').value,tipo:'manual',valor:Math.round(v*100)/100};
+  if($('pv-s').value==='recebido')prov.eventos.push({data:e.data,ticker:e.ticker,tipo:'manual',valor:e.valor});
+  else prov.previstos.push(e);
+  editandoProv=null;saveProvFile();
+}
+function recProv(id){
+  const e=(prov.previstos||[]).find(x=>x.id===id);if(!e)return;
+  prov.previstos=prov.previstos.filter(x=>x.id!==id);
+  prov.eventos.push({data:e.data,ticker:e.ticker,tipo:'manual',valor:e.valor});
+  saveProvFile();
+}
+function editProv(id){
+  const e=(prov.previstos||[]).find(x=>x.id===id);if(!e)return;
+  editandoProv=id;
+  $('prov-form-box').open=true;
+  $('pv-t').value=e.ticker;$('pv-d').value=e.data;$('pv-s').value='previsto';
+  $('pv-v').dataset.raw=String(Math.round(e.valor*100));$('pv-v').value=num2(e.valor);
+  $('pv-v').scrollIntoView({behavior:'smooth',block:'center'});
+}
+function delProv(id){
+  prov.previstos=(prov.previstos||[]).filter(x=>x.id!==id);
+  saveProvFile();
+}
+
 function renderRenda(){
-  if(!prov||!prov.eventos||!prov.eventos.length){$('renda').innerHTML='';return}
+  if(!prov)prov={eventos:[]};
+  if(!prov.eventos)prov.eventos=[];
   const ev=prov.eventos,ano=String(new Date().getFullYear());
   const doAno=ev.filter(e=>e.data.startsWith(ano));
   const tot=doAno.reduce((s,e)=>s+e.valor,0);
@@ -270,24 +310,51 @@ function renderRenda(){
   const porMes={};for(const e of ev){const k=e.data.slice(0,7);porMes[k]=(porMes[k]||0)+e.valor}
   const meses=Object.keys(porMes).sort().slice(-12);
   const nAno=new Set(doAno.map(e=>e.data.slice(0,7))).size||1;
-  const mx=Math.max(...meses.map(m=>porMes[m]));
   const MN=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-  const cols=meses.map(m=>{const v=porMes[m];
-    return `<div class="rcol"><div class="rv">${v.toFixed(0)}</div><div class="rbar" style="height:${Math.max(4,v/mx*82).toFixed(0)}%"></div><div class="rm">${MN[+m.slice(5,7)-1]}</div></div>`}).join('');
+  let grafico='';
+  if(meses.length){
+    const mx=Math.max(...meses.map(m=>porMes[m]));
+    const cols=meses.map(m=>{const v=porMes[m];
+      return `<div class="rcol"><div class="rv">${v.toFixed(0)}</div><div class="rbar" style="height:${Math.max(4,v/mx*82).toFixed(0)}%"></div><div class="rm">${MN[+m.slice(5,7)-1]}</div></div>`}).join('');
+    grafico=`<div class="chart-box"><div class="rc">${cols}</div></div>`;
+  }
   const porAt={};for(const e of ev)porAt[e.ticker]=(porAt[e.ticker]||0)+e.valor;
   const ats=Object.entries(porAt).sort((a,b)=>b[1]-a[1]);
-  const mxa=ats[0][1];
+  const mxa=ats.length?ats[0][1]:1;
   const rows=ats.map(([t,v])=>`<div class="arow"><div class="alab"><b>${t}</b><span>${brl(v,2)}</span></div>`
     +`<div class="atrk"><div class="afill" style="width:${(v/mxa*100).toFixed(1)}%"></div></div></div>`).join('');
+
+  // A receber (lancamentos previstos, ordenados por data)
+  const prevs=(prov.previstos||[]).slice().sort((a,b)=>a.data.localeCompare(b.data));
+  const somaPrev=prevs.reduce((s,e)=>s+e.valor,0);
+  const prevRows=prevs.map(e=>
+    `<div class="alab" style="margin:9px 0"><b>${e.ticker}</b><span>${e.data.split('-').reverse().join('/')} · <b>${brl(e.valor,2)}</b>`
+    +`<button class="mini" onclick="recProv(${e.id})" title="Confirmar recebido">✔</button>`
+    +`<button class="mini" onclick="editProv(${e.id})" title="Editar">✎</button>`
+    +`<button class="mini" onclick="delProv(${e.id})" title="Excluir">🗑</button></span></div>`).join('');
+
+  const hoje=new Date().toISOString().slice(0,10);
+  const opts=carteira.ativos_bolsa.map(a=>`<option>${a.ticker}</option>`).join('')+'<option>Tesouro</option>';
   $('renda').innerHTML=`<h2>Renda passiva</h2>
   <div class="mgrid3">
     <div class="mcard"><div class="l">No ano</div><div class="v pos">${brl(tot,2)}</div></div>
     <div class="mcard"><div class="l">Média mensal</div><div class="v">${brl(tot/nAno,2)}</div></div>
     <div class="mcard"><div class="l">Este mês</div><div class="v">${brl(esteMes,2)}</div></div>
   </div>
-  <div class="chart-box"><div class="rc">${cols}</div></div>
+  ${grafico}
+  ${prevs.length?`<div class="al plan"><div class="h">A receber · ${brl(somaPrev,2)}</div>${prevRows}</div>`:''}
+  <details id="prov-form-box"><summary>➕ Lançar provento</summary>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+      <select id="pv-t">${opts}</select>
+      <input id="pv-v" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="0" value="0,00" placeholder="valor">
+      <input id="pv-d" type="date" value="${hoje}">
+      <select id="pv-s"><option value="previsto">Previsto (a receber)</option><option value="recebido">Já recebido</option></select>
+    </div>
+    <button style="margin-top:10px;width:100%" onclick="lancarProv()">Salvar provento</button>
+    <p class="cap">Previsto entra na lista "A receber"; ao cair na conta, toque em ✔ e ele passa a contar na renda.</p>
+  </details>
   <details><summary>Renda por ativo</summary><div style="margin-top:8px">${rows}</div>
-  <div class="cap">Fonte: ${prov._fonte||'extrato'} · atualizado em ${prov._atualizado||''}</div></details>`;
+  <div class="cap">Fonte: ${prov._fonte||'lançamentos'} · atualizado em ${prov._atualizado||''}</div></details>`;
 }
 
 function renderAloc(an){

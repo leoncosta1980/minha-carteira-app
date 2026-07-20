@@ -65,7 +65,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
 
 <div id="scr-pin" class="center hide">
   <img src="icone-192.png" alt=""><div class="hdr" style="margin:0"><div><div class="t">Minha Carteira</div><div class="s">digite seu PIN</div></div></div>
-  <input id="pin-in" type="password" inputmode="numeric" placeholder="PIN">
+  <input id="pin-in" type="password" inputmode="numeric" placeholder="PIN" onkeydown="if(event.key==='Enter')checkPin()">
   <button onclick="checkPin()">Entrar</button>
 </div>
 
@@ -85,6 +85,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
     <img src="icone-192.png" alt="">
     <div><div class="t">Minha Carteira</div><div class="s" id="sub">renda passiva em construção</div></div>
     <div class="sp"></div>
+    <button class="sec" onclick="sair()" aria-label="Bloquear">🔒</button>
     <button class="sec" onclick="openCfg()" aria-label="Configurações">⚙</button>
     <button onclick="refresh(true)">Atualizar</button>
   </div>
@@ -141,7 +142,8 @@ function saveCfg(){
   sessionStorage.setItem('mc_ok','1');
   show('scr-app');refresh(true);
 }
-function checkPin(){if($('pin-in').value===cfg.pin){sessionStorage.setItem('mc_ok','1');show('scr-app');refresh(false)}else toast('PIN incorreto')}
+function checkPin(){if($('pin-in').value===cfg.pin){$('pin-in').value='';sessionStorage.setItem('mc_ok','1');show('scr-app');refresh(false)}else toast('PIN incorreto')}
+function sair(){sessionStorage.removeItem('mc_ok');if(cfg.pin)show('scr-pin');else toast('Sem PIN configurado — defina um em ⚙')}
 
 const ghH=()=>({Authorization:'Bearer '+cfg.gh,Accept:'application/vnd.github+json'});
 const b64dec=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g,'')),c=>c.charCodeAt(0)));
@@ -320,6 +322,7 @@ async function gemini(prompt){
 
 async function refresh(force){
   if(!cfg.repo||!cfg.gh){openCfg();return}
+  show('scr-app');   // garante que PIN/config sumam sempre que o painel atualiza
   $('sub').textContent='atualizando...';
   try{
     const cj=await ghGet('carteira.json');

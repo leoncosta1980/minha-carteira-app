@@ -89,6 +89,12 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
 .prow .rgt{text-align:right;flex-shrink:0}
 .prow .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:7px}
 .prow .acts .mini{margin-left:0}
+.zrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid rgba(134,239,172,.16)}
+.zrow:first-of-type{border-top:0}
+.zrow .zt{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.zrow .zt b{font-size:.95rem}
+.zrow .zsub{font-size:.73rem;opacity:.72;margin-top:2px}
+.zrow .zp{font-size:.95rem;font-weight:700;flex-shrink:0}
 .arow{margin:11px 0}
 .alab{display:flex;justify-content:space-between;align-items:baseline;font-size:.78rem;margin-bottom:5px}
 .alab b{font-size:.85rem}
@@ -162,9 +168,9 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div id="renda"></div>
   <h2>Projeção bola de neve</h2>
   <div class="chart-box">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div><label style="margin-top:0">Aporte mensal (R$)</label><input id="pj-a" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="40000" value="400,00"></div>
-      <div><label style="margin-top:0">Meta de renda mensal (R$)</label><input id="pj-m" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="100000" value="1.000,00"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end">
+      <div style="display:flex;flex-direction:column;justify-content:flex-end"><label style="margin-top:0;white-space:nowrap">Aporte mensal (R$)</label><input id="pj-a" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="40000" value="400,00"></div>
+      <div style="display:flex;flex-direction:column;justify-content:flex-end"><label style="margin-top:0;white-space:nowrap">Meta de renda (R$)</label><input id="pj-m" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="100000" value="1.000,00"></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button onclick="projetar()" style="flex:1">Projetar</button>
@@ -307,7 +313,7 @@ function analisar(){
     let teto=tetoBazin(res,a);
     if(!teto&&indic&&indic[a.ticker])teto=indic[a.ticker].teto;
     a._teto=teto;
-    if(teto&&a._p<=teto){sin.push(`abaixo do teto Bazin (${brl(teto,2)})`);if(a._p<=teto*.9)forte=true}
+    if(teto&&a._p<=teto){sin.push(`teto ${brl(teto,2)}`);if(a._p<=teto*.9)forte=true}
     if(a.tipo==='fii'&&a.vp_cota){const pv=a._p/a.vp_cota;if(pv<=P.pvp_barato_fii)sin.push(`P/VP ${pv.toFixed(2)}`)}
     // RSI: calculo local; senao, o publicado pelo agente diario
     const closes=res&&res.historicalDataPrice?res.historicalDataPrice.map(x=>x.close).filter(x=>x!=null):null;
@@ -315,7 +321,7 @@ function analisar(){
     if(r==null&&indic&&indic[a.ticker]&&indic[a.ticker].rsi!=null)r=indic[a.ticker].rsi;
     a._rsi=r;
     if(r!=null&&r<=P.rsi_sobrevenda){sin.push(`RSI ${Math.round(r)} (sobrevenda)`);if(r<=P.rsi_urgente)forte=true}
-    if(sin.length)out.op.push({txt:`${a.ticker} (${brl(a._p,2)}): ${sin.join('; ')}`,forte});
+    if(sin.length)out.op.push({t:a.ticker,preco:a._p,sin:sin.join(' · '),forte});
     if(forte)out.urg.push(a.ticker);
   }
   for(const rf of carteira.renda_fixa){const pc=rf.valor/patr,dv=rf.meta_pct-pc;if(dv>=P.desvio_alerta)out.reb.push({t:rf.nome.split(' (')[0],pc,meta:rf.meta_pct,ap:dv*patr})}
@@ -450,7 +456,10 @@ function render(an,falhas){
     `<div class="mcard"><div class="l">Patrimônio</div><div class="v">${brl(an.patr,2)}</div><div class="d">bolsa ${brl(an.patr-an.vrf,2)} · tesouro ${brl(an.vrf,2)}</div></div>`+
     `<div class="mcard"><div class="l">Resultado na bolsa</div><div class="v ${cls}">${brl(res,2)}</div><div class="d ${cls}">${pct(res/custo)} sobre o custo (sem contar dividendos)</div></div>`;
   let al='';
-  if(an.op.length)al+=`<div class="al op"><div class="h">Zona de compra</div><ul>${an.op.map(o=>`<li>${o.txt}${o.forte?' <span class="chip">SINAL FORTE</span>':''}</li>`).join('')}</ul></div>`;
+  if(an.op.length)al+=`<div class="al op"><div class="h">Zona de compra</div>`
+    +an.op.map(o=>`<div class="zrow"><div><div class="zt"><b>${o.t}</b>${o.forte?'<span class="chip">SINAL FORTE</span>':''}</div>`
+      +`<div class="zsub">${o.sin}</div></div><span class="zp">${brl(o.preco,2)}</span></div>`).join('')
+    +`</div>`;
   al+=an.reb.length
     ?`<div class="al plan"><div class="h">Próximo aporte — nesta ordem</div><ul>${an.reb.map((r,i)=>`<li>${i+1}º <b>${r.t}</b>: compre ~${brl(r.ap)} (está em ${pct(r.pc)}, meta ${pct(r.meta,0)})</li>`).join('')}</ul></div>`
     :`<div class="al plan"><div class="h">Alocação</div>Carteira dentro das metas. Nenhuma compra necessária hoje.</div>`;

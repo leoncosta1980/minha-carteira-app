@@ -630,7 +630,7 @@ function renderCharts(an){
   if(hist&&hist.length>1){
     $('hist-box').classList.remove('hide');
     if(charts.hist)charts.hist.destroy();
-    charts.hist=new Chart($('ch-hist'),{type:'line',data:{labels:hist.map(x=>x[0].slice(5)),datasets:[{data:hist.map(x=>x[1]),borderColor:'#4ADE80',backgroundColor:'rgba(74,222,128,.12)',fill:true,tension:.25,pointRadius:0}]},
+    charts.hist=new Chart($('ch-hist'),{type:'line',data:{labels:hist.map(x=>`${x[0].slice(8,10)}/${x[0].slice(5,7)}`),datasets:[{data:hist.map(x=>x[1]),borderColor:'#4ADE80',backgroundColor:'rgba(74,222,128,.12)',fill:true,tension:.25,pointRadius:0}]},
       options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8FA89C',maxTicksLimit:6},grid:{display:false}},y:{ticks:{color:'#8FA89C'},grid:{color:'#24352E'}}}}});
   }
 }

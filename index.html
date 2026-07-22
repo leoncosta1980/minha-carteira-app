@@ -492,8 +492,12 @@ function render(an,falhas){
   const provisionado=((prov&&prov.previstos)||[]).reduce((s,e)=>s+e.valor,0);
   const linhaProv=provisionado>0
     ?`<div class="d pos">+ ${brl(provisionado,2)} provisionados a receber</div>`:'';
+  const resv=(carteira.reserva||[]).reduce((s,r)=>s+r.valor,0);
+  const linhaDet=resv>0
+    ?`bolsa ${brl(an.patr-an.vrf,2)} · tesouro ${brl(an.vrf,2)} · reserva ${brl(resv,2)}`
+    :`bolsa ${brl(an.patr-an.vrf,2)} · tesouro ${brl(an.vrf,2)}`;
   $('metrics').innerHTML=
-    `<div class="mcard"><div class="l">Patrimônio</div><div class="v">${brl(an.patr,2)}</div><div class="d">bolsa ${brl(an.patr-an.vrf,2)} · tesouro ${brl(an.vrf,2)}</div>${linhaProv}</div>`+
+    `<div class="mcard"><div class="l">Patrimônio total</div><div class="v">${brl(an.patr+resv,2)}</div><div class="d">${linhaDet}</div>${linhaProv}</div>`+
     `<div class="mcard"><div class="l">Resultado na bolsa</div><div class="v ${cls}">${brl(res,2)}</div><div class="d ${cls}">${pct(res/custo)} sobre o custo (sem contar dividendos)</div></div>`;
   let al='';
   if(an.op.length)al+=`<div class="al op"><div class="h">Zona de compra</div>`
@@ -522,6 +526,12 @@ function renderAssets(an){
   h+=`<div class="gt"><b>Tesouro Direto</b> <span>· ${brl(vrf)} (${pct(vrf/an.patr)})</span></div><div class="tblw"><table><tr><th>Título</th><th>Valor</th><th>Meta</th><th>%cart</th></tr>`;
   for(const rf of carteira.renda_fixa)h+=`<tr><td>${rf.nome}</td><td>${brl(rf.valor,2)}</td><td>${pct(rf.meta_pct,0)}</td><td>${pct(rf.valor/an.patr)}</td></tr>`;
   h+='</table></div>';
+  if(carteira.reserva&&carteira.reserva.length){
+    const tr=carteira.reserva.reduce((s,r)=>s+r.valor,0);
+    h+=`<div class="gt"><b>Reserva de emergência</b> <span>· ${brl(tr,2)} (fora do rebalanceamento)</span></div><div class="tblw"><table><tr><th>Onde</th><th>Valor</th></tr>`;
+    for(const r of carteira.reserva)h+=`<tr><td>${r.nome}</td><td>${brl(r.valor,2)}</td></tr>`;
+    h+='</table></div>';
+  }
   $('assets').innerHTML=h;
 }
 
@@ -708,7 +718,13 @@ function renderEdit(){
   carteira.ativos_bolsa.forEach((a,i)=>{h+=`<tr><td>${a.ticker}</td><td><input id="e-q-${i}" type="number" step="any" value="${a.qtd}"></td><td>${money(`e-p-${i}`,a.pm)}</td><td><input id="e-m-${i}" type="number" step="0.1" value="${(a.meta_pct*100).toFixed(1)}" oninput="calcMetas()"></td></tr>`});
   h+='</table></div><div class="tblw"><table><tr><th>Título</th><th>Valor (R$)</th><th>Meta %</th></tr>';
   carteira.renda_fixa.forEach((rf,i)=>{h+=`<tr><td>${rf.nome}</td><td>${money(`e-rv-${i}`,rf.valor,100)}</td><td><input id="e-rm-${i}" type="number" step="0.1" value="${(rf.meta_pct*100).toFixed(1)}" oninput="calcMetas()"></td></tr>`});
-  h+='</table></div><div id="soma-live" style="font-size:.85rem;font-weight:700;margin-top:8px"></div>';
+  h+='</table></div>';
+  if(carteira.reserva&&carteira.reserva.length){
+    h+='<div class="tblw"><table><tr><th>Reserva (sem meta)</th><th>Valor (R$)</th></tr>';
+    carteira.reserva.forEach((r,i)=>{h+=`<tr><td>${r.nome}</td><td>${money(`e-rsv-${i}`,r.valor,110)}</td></tr>`});
+    h+='</table></div>';
+  }
+  h+='<div id="soma-live" style="font-size:.85rem;font-weight:700;margin-top:8px"></div>';
   $('edit-area').innerHTML=h;
   calcMetas();
   const sel=$('rm-sel');
@@ -738,6 +754,7 @@ async function saveCarteira(){
     let soma=0;
     carteira.ativos_bolsa.forEach((a,i)=>{a.qtd=parseFloat($(`e-q-${i}`).value)||a.qtd;a.pm=moneyVal($(`e-p-${i}`))||a.pm;a.meta_pct=Math.round((parseFloat($(`e-m-${i}`).value)||0)*10)/1000;soma+=a.meta_pct});
     carteira.renda_fixa.forEach((rf,i)=>{rf.valor=moneyVal($(`e-rv-${i}`))||rf.valor;rf.meta_pct=Math.round((parseFloat($(`e-rm-${i}`).value)||0)*10)/1000;soma+=rf.meta_pct});
+    (carteira.reserva||[]).forEach((r,i)=>{const el=$(`e-rsv-${i}`);if(el)r.valor=moneyVal(el)||r.valor});
     $('soma-metas').textContent=Math.abs(soma-1)>.005?`Atenção: metas somam ${pct(soma,1)} (ideal 100%)`:'';
     await salvarCarteiraArquivo();
     toast('Carteira salva no GitHub');
@@ -907,7 +924,8 @@ async function exportarPDF(){
   const ev=(prov&&prov.eventos)||[];
   const ano=String(new Date().getFullYear());
   const rendaAno=ev.filter(e=>e.data.startsWith(ano)).reduce((s,e)=>s+e.valor,0);
-  const cards=[['Patrimônio',brl(an.patr,2)],['Resultado na bolsa',brl(res,2)],
+  const resvPdf=(carteira.reserva||[]).reduce((s,r)=>s+r.valor,0);
+  const cards=[['Patrimônio total',brl(an.patr+resvPdf,2)],['Resultado na bolsa',brl(res,2)],
     ['Renda passiva no ano',brl(rendaAno,2)],['Yield médio',(gYield*100).toFixed(2)+'%/mês']];
   let x=14;
   for(const[l,v]of cards){
@@ -923,6 +941,7 @@ async function exportarPDF(){
   const corpo=carteira.ativos_bolsa.map(a=>[a.ticker,NOME_G[a.tipo]||'',String(a.qtd),
     num2(a.pm),num2(a._p),brl(a._v,2),pct((a._p-a.pm)/a.pm),pct(a._v/an.patr),pct(a.meta_pct,0)]);
   for(const rf of carteira.renda_fixa)corpo.push([rf.nome,'Tesouro','—','—','—',brl(rf.valor,2),'—',pct(rf.valor/an.patr),pct(rf.meta_pct,0)]);
+  for(const r of(carteira.reserva||[]))corpo.push([r.nome,'Reserva','—','—','—',brl(r.valor,2),'—','—','—']);
   doc.autoTable({startY:60,head:[['Ativo','Tipo','Qtd','PM','Atual','Posição','Var','% cart','Meta']],
     body:corpo,styles:{fontSize:7.5,cellPadding:1.8},
     headStyles:{fillColor:VERDE,textColor:255,fontSize:7.5},

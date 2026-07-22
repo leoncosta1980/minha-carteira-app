@@ -486,8 +486,11 @@ function render(an,falhas){
   $('warns').innerHTML=falhas.length?`<div class="warn">Sem cotação ao vivo para: ${falhas.join(', ')}. Exibindo preço médio.</div>`:'';
   const custo=carteira.ativos_bolsa.reduce((s,a)=>s+a.qtd*a.pm,0);
   const res=an.patr-an.vrf-custo,cls=res>=0?'pos':'neg';
+  const provisionado=((prov&&prov.previstos)||[]).reduce((s,e)=>s+e.valor,0);
+  const linhaProv=provisionado>0
+    ?`<div class="d pos">+ ${brl(provisionado,2)} provisionados a receber</div>`:'';
   $('metrics').innerHTML=
-    `<div class="mcard"><div class="l">Patrimônio</div><div class="v">${brl(an.patr,2)}</div><div class="d">bolsa ${brl(an.patr-an.vrf,2)} · tesouro ${brl(an.vrf,2)}</div></div>`+
+    `<div class="mcard"><div class="l">Patrimônio</div><div class="v">${brl(an.patr,2)}</div><div class="d">bolsa ${brl(an.patr-an.vrf,2)} · tesouro ${brl(an.vrf,2)}</div>${linhaProv}</div>`+
     `<div class="mcard"><div class="l">Resultado na bolsa</div><div class="v ${cls}">${brl(res,2)}</div><div class="d ${cls}">${pct(res/custo)} sobre o custo (sem contar dividendos)</div></div>`;
   let al='';
   if(an.op.length)al+=`<div class="al op"><div class="h">Zona de compra</div>`

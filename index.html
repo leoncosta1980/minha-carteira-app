@@ -193,6 +193,40 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
     <button class="sec mais" onclick="sair()">🔒 Bloquear o app</button>
     <button class="sec mais" onclick="openCfg()">⚙️ Configurações e chaves</button>
   </div>
+  <details><summary>➕ Adicionar investimento</summary>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+      <div><label style="margin-top:0">Tipo</label>
+        <select id="nv-tipo" onchange="nvTipo()">
+          <option value="acao">Ação</option><option value="fii">FII</option>
+          <option value="etf">ETF</option><option value="rf">Renda fixa (Tesouro etc.)</option>
+        </select></div>
+      <div id="nv-tk-box"><label style="margin-top:0">Código (ticker)</label>
+        <input id="nv-tk" placeholder="ex.: BBAS3" style="text-transform:uppercase"></div>
+    </div>
+    <div id="nv-bolsa">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div><label>Quantidade</label><input id="nv-q" type="number" step="any" placeholder="0"></div>
+        <div><label>Preço médio</label><input id="nv-p" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="0" value="0,00"></div>
+        <div><label>Meta %</label><input id="nv-m" type="number" step="0.1" placeholder="5"></div>
+      </div>
+      <label>Nome da empresa/fundo (para notícias — opcional)</label>
+      <input id="nv-n" placeholder="ex.: Banco do Brasil">
+    </div>
+    <div id="nv-rf" style="display:none">
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px">
+        <div><label>Nome do título</label><input id="nv-rfn" placeholder="ex.: Tesouro Prefixado 2031"></div>
+        <div><label>Valor</label><input id="nv-rfv" type="text" inputmode="numeric" oninput="maskMoney(this)" data-raw="0" value="0,00"></div>
+        <div><label>Meta %</label><input id="nv-rfm" type="number" step="0.1" placeholder="5"></div>
+      </div>
+    </div>
+    <button style="margin-top:12px;width:100%" onclick="addInvest()">Adicionar à carteira</button>
+    <p class="cap">O ticker é validado na brapi antes de salvar. Depois de adicionar, ajuste as metas para fecharem 100%.</p>
+    <div class="sect-div" style="margin:14px 0 10px"></div>
+    <div style="display:flex;gap:8px;align-items:end">
+      <div style="flex:1"><label style="margin-top:0">Remover da carteira (posição zerada)</label><select id="rm-sel"></select></div>
+      <button class="sec" onclick="removerInvest()">Remover</button>
+    </div>
+  </details>
   <details><summary>✏️ Editar carteira (quantidade, preço médio, metas)</summary>
     <p class="cap">Salva no carteira.json do GitHub — o WhatsApp usa os novos números na próxima execução.</p>
     <div id="edit-area"></div>
@@ -657,6 +691,10 @@ function renderEdit(){
   h+='</table></div><div id="soma-live" style="font-size:.85rem;font-weight:700;margin-top:8px"></div>';
   $('edit-area').innerHTML=h;
   calcMetas();
+  const sel=$('rm-sel');
+  if(sel)sel.innerHTML='<option value="">— escolher —</option>'
+    +carteira.ativos_bolsa.map(a=>`<option>${a.ticker}</option>`).join('')
+    +carteira.renda_fixa.map(r=>`<option>${r.nome}</option>`).join('');
 }
 
 function calcMetas(){
@@ -681,12 +719,68 @@ async function saveCarteira(){
     carteira.ativos_bolsa.forEach((a,i)=>{a.qtd=parseFloat($(`e-q-${i}`).value)||a.qtd;a.pm=moneyVal($(`e-p-${i}`))||a.pm;a.meta_pct=Math.round((parseFloat($(`e-m-${i}`).value)||0)*10)/1000;soma+=a.meta_pct});
     carteira.renda_fixa.forEach((rf,i)=>{rf.valor=moneyVal($(`e-rv-${i}`))||rf.valor;rf.meta_pct=Math.round((parseFloat($(`e-rm-${i}`).value)||0)*10)/1000;soma+=rf.meta_pct});
     $('soma-metas').textContent=Math.abs(soma-1)>.005?`Atenção: metas somam ${pct(soma,1)} (ideal 100%)`:'';
-    const limpa=JSON.parse(JSON.stringify(carteira));
-    for(const a of limpa.ativos_bolsa)for(const k of Object.keys(a))if(k.startsWith('_')&&k!=='_nota')delete a[k];
-    await ghPut('carteira.json',JSON.stringify(limpa,null,2),'Atualiza carteira via app');
+    await salvarCarteiraArquivo();
     toast('Carteira salva no GitHub');
     refresh(true);
   }catch(e){toast('Falha ao salvar: '+e.message)}
+}
+
+async function salvarCarteiraArquivo(){
+  const limpa=JSON.parse(JSON.stringify(carteira));
+  for(const a of limpa.ativos_bolsa)for(const k of Object.keys(a))if(k.startsWith('_')&&k!=='_nota')delete a[k];
+  await ghPut('carteira.json',JSON.stringify(limpa,null,2),'Atualiza carteira via app');
+}
+
+function nvTipo(){
+  const rf=$('nv-tipo').value==='rf';
+  $('nv-rf').style.display=rf?'':'none';
+  $('nv-bolsa').style.display=rf?'none':'';
+  $('nv-tk-box').style.display=rf?'none':'';
+}
+
+async function addInvest(){
+  const tipo=$('nv-tipo').value;
+  try{
+    if(tipo==='rf'){
+      const nome=$('nv-rfn').value.trim(),val=moneyVal($('nv-rfv')),meta=(parseFloat($('nv-rfm').value)||0)/100;
+      if(!nome||!val){toast('Preencha o nome e o valor do título');return}
+      if(carteira.renda_fixa.some(r=>r.nome===nome)){toast('Esse título já está na carteira');return}
+      carteira.renda_fixa.push({nome,valor:Math.round(val*100)/100,meta_pct:meta});
+    }else{
+      const tk=$('nv-tk').value.trim().toUpperCase();
+      const qtd=parseFloat($('nv-q').value),pm=moneyVal($('nv-p')),meta=(parseFloat($('nv-m').value)||0)/100;
+      if(!tk||!qtd||!pm){toast('Preencha código, quantidade e preço médio');return}
+      if(carteira.ativos_bolsa.some(a=>a.ticker===tk)){toast(tk+' já está na carteira — edite a linha dele');return}
+      toast('Validando '+tk+' na brapi...');
+      const q=await quote(tk);
+      if(!q){toast('Não encontrei cotação para '+tk+' — confira o código');return}
+      const novo={ticker:tk,tipo,qtd,pm:Math.round(pm*100)/100,meta_pct:meta,
+        nome:$('nv-n').value.trim()||q.longName||null};
+      if(tipo!=='etf'){
+        novo.yield_bazin=tipo==='fii'?0.08:0.06;
+        novo.teto_manual=null;
+        if(tipo==='fii')novo.vp_cota=null;
+        if(tipo==='acao'){novo.lpa=null;novo.vpa=null}
+      }
+      carteira.ativos_bolsa.push(novo);
+    }
+    await salvarCarteiraArquivo();
+    toast('Investimento adicionado — o agente já vai monitorá-lo');
+    refresh(true);
+  }catch(e){toast('Falha ao adicionar: '+e.message)}
+}
+
+async function removerInvest(){
+  const sel=$('rm-sel').value;
+  if(!sel){toast('Escolha o que remover');return}
+  if(!confirm(`Remover ${sel} da carteira? O histórico de proventos dele será mantido.`))return;
+  try{
+    carteira.ativos_bolsa=carteira.ativos_bolsa.filter(a=>a.ticker!==sel);
+    carteira.renda_fixa=carteira.renda_fixa.filter(r=>r.nome!==sel);
+    await salvarCarteiraArquivo();
+    toast(sel+' removido da carteira');
+    refresh(true);
+  }catch(e){toast('Falha ao remover: '+e.message)}
 }
 
 async function runIA(){

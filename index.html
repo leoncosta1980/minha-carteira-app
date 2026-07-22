@@ -850,7 +850,8 @@ async function runIA(){
       const aReceber=((prov&&prov.previstos)||[]).map(p=>`${p.data} ${p.ticker} ${brl(p.valor,2)}`).join('; ')||'nenhum';
       let man='';
       if(noticias)for(const a of carteira.ativos_bolsa)for(const n of(noticias[a.ticker]||[]))man+=`[${a.ticker}] ${n.titulo}\n`;
-      const prompt=`Voce e um analista de investimentos focado em GERACAO DE RENDA PASSIVA (dividendos, value investing, buy-and-hold), analisando a carteira de um investidor brasileiro cujo objetivo declarado e maximizar a renda passiva mensal o quanto antes, com prudencia.\n\n`
+      const prompt=`Voce e um analista de investimentos BRUTALMENTE HONESTO, focado em GERACAO DE RENDA PASSIVA (dividendos, value investing, buy-and-hold), analisando a carteira de um investidor brasileiro cujo objetivo declarado e maximizar a renda passiva mensal o quanto antes, com prudencia.\n\n`
+      +`REGRAS DE TOM (obrigatorias): o investidor pediu explicitamente sinceridade brutal. NAO elogie para agradar. NAO suavize problemas. Se um ativo esta ruim, diga que esta ruim e por que. Se a carteira perde do CDI, diga com todas as letras. Aponte contradicoes entre o objetivo declarado e a alocacao real. Numeros antes de adjetivos. Zero tom motivacional ou frases de consolo. Elogie APENAS o que os numeros sustentarem. Se a fórmula/indicador nao capturar um risco (ex.: yield alto com cota derretendo = possivel renda que corroi o principal), avise.\n\n`
       +`CARTEIRA (investimentos ${brl(an.patr,2)}):\n${pos}\n`
       +`Tesouro Direto: ${brl(an.vrf,2)} (IPCA+ 2074 meta 13%, Selic 2028 meta 7%).\n`
       +((carteira.reserva&&carteira.reserva.length)

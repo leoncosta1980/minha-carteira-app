@@ -201,6 +201,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
         <select id="nv-tipo" onchange="nvTipo()">
           <option value="acao">Ação</option><option value="fii">FII</option>
           <option value="etf">ETF</option><option value="rf">Renda fixa (Tesouro etc.)</option>
+          <option value="reserva">Reserva (CDI/caixa)</option>
         </select></div>
       <div id="nv-tk-box"><label style="margin-top:0">Código (ticker)</label>
         <input id="nv-tk" placeholder="ex.: BBAS3" style="text-transform:uppercase"></div>
@@ -730,7 +731,8 @@ function renderEdit(){
   const sel=$('rm-sel');
   if(sel)sel.innerHTML='<option value="">— escolher —</option>'
     +carteira.ativos_bolsa.map(a=>`<option>${a.ticker}</option>`).join('')
-    +carteira.renda_fixa.map(r=>`<option>${r.nome}</option>`).join('');
+    +carteira.renda_fixa.map(r=>`<option>${r.nome}</option>`).join('')
+    +(carteira.reserva||[]).map(r=>`<option>${r.nome}</option>`).join('');
 }
 
 function calcMetas(){
@@ -769,16 +771,22 @@ async function salvarCarteiraArquivo(){
 }
 
 function nvTipo(){
-  const rf=$('nv-tipo').value==='rf';
-  $('nv-rf').style.display=rf?'':'none';
-  $('nv-bolsa').style.display=rf?'none':'';
-  $('nv-tk-box').style.display=rf?'none':'';
+  const t=$('nv-tipo').value,fixo=(t==='rf'||t==='reserva');
+  $('nv-rf').style.display=fixo?'':'none';
+  $('nv-bolsa').style.display=fixo?'none':'';
+  $('nv-tk-box').style.display=fixo?'none':'';
 }
 
 async function addInvest(){
   const tipo=$('nv-tipo').value;
   try{
-    if(tipo==='rf'){
+    if(tipo==='reserva'){
+      const nome=$('nv-rfn').value.trim(),val=moneyVal($('nv-rfv'));
+      if(!nome||!val){toast('Preencha o nome e o valor');return}
+      if(!carteira.reserva)carteira.reserva=[];
+      if(carteira.reserva.some(r=>r.nome===nome)){toast('Essa reserva já existe — edite o valor dela');return}
+      carteira.reserva.push({nome,valor:Math.round(val*100)/100});
+    }else if(tipo==='rf'){
       const nome=$('nv-rfn').value.trim(),val=moneyVal($('nv-rfv')),meta=(parseFloat($('nv-rfm').value)||0)/100;
       if(!nome||!val){toast('Preencha o nome e o valor do título');return}
       if(carteira.renda_fixa.some(r=>r.nome===nome)){toast('Esse título já está na carteira');return}
@@ -814,6 +822,7 @@ async function removerInvest(){
   try{
     carteira.ativos_bolsa=carteira.ativos_bolsa.filter(a=>a.ticker!==sel);
     carteira.renda_fixa=carteira.renda_fixa.filter(r=>r.nome!==sel);
+    if(carteira.reserva)carteira.reserva=carteira.reserva.filter(r=>r.nome!==sel);
     await salvarCarteiraArquivo();
     toast(sel+' removido da carteira');
     refresh(true);
@@ -842,8 +851,14 @@ async function runIA(){
       let man='';
       if(noticias)for(const a of carteira.ativos_bolsa)for(const n of(noticias[a.ticker]||[]))man+=`[${a.ticker}] ${n.titulo}\n`;
       const prompt=`Voce e um analista de investimentos focado em GERACAO DE RENDA PASSIVA (dividendos, value investing, buy-and-hold), analisando a carteira de um investidor brasileiro cujo objetivo declarado e maximizar a renda passiva mensal o quanto antes, com prudencia.\n\n`
-      +`CARTEIRA (patrimonio total ${brl(an.patr,2)}):\n${pos}\n`
-      +`Tesouro Direto: ${brl(an.vrf,2)} (IPCA+ 2074 meta 13%, Selic 2028 meta 7%).\n\n`
+      +`CARTEIRA (investimentos ${brl(an.patr,2)}):\n${pos}\n`
+      +`Tesouro Direto: ${brl(an.vrf,2)} (IPCA+ 2074 meta 13%, Selic 2028 meta 7%).\n`
+      +((carteira.reserva&&carteira.reserva.length)
+        ?`RESERVA DE EMERGENCIA (fora do rebalanceamento, rende ~CDI com liquidez diaria): `
+         +carteira.reserva.map(r=>`${r.nome} ${brl(r.valor,2)}`).join('; ')
+         +`. Patrimonio total incluindo reserva: ${brl(an.patr+carteira.reserva.reduce((s,r)=>s+r.valor,0),2)}.\n`
+         +`Considere a reserva na visao global: adequacao do tamanho (meses de custo de vida), proporcao renda fixa x variavel do patrimonio total, e se ha excesso parado que poderia migrar gradualmente para a estrategia de renda.\n\n`
+        :'\n')
       +`RENDA PASSIVA: ${brl(rendaAno,2)} no ano, yield medio da carteira ${(gYield*100).toFixed(2)}%/mes sobre o custo.\n`
       +`PROVENTOS A RECEBER: ${aReceber}.\n\n`
       +`NOTICIAS RECENTES:\n${man}\n`

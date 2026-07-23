@@ -337,6 +337,20 @@ async function quote(t){
 function rsi(closes,n=14){if(!closes||closes.length<n+1)return null;const d=[];for(let i=1;i<closes.length;i++)d.push(closes[i]-closes[i-1]);const w=d.slice(-n);let g=0,p=0;for(const x of w){if(x>0)g+=x;else p-=x}g/=n;p/=n;if(p===0)return 100;return 100-100/(1+g/p)}
 function tetoBazin(res,a){if(a.teto_manual)return a.teto_manual;if(!res||!a.yield_bazin)return null;const cds=res.dividendsData&&res.dividendsData.cashDividends;if(!cds||!cds.length)return null;const lim=Date.now()-365*864e5;let tot=0;for(const d of cds){const dt=Date.parse(d.paymentDate||d.lastDatePrior||'');if(dt>=lim&&d.rate)tot+=d.rate}return tot>0?tot/a.yield_bazin:null}
 
+function intlInfo(){
+  const it=carteira.internacional;
+  if(!it||((!it.ativos||!it.ativos.length)&&!it.caixa_usd))return null;
+  const fx=(indic&&indic._usdbrl)||null;
+  let usd=it.caixa_usd||0;
+  for(const a of(it.ativos||[])){
+    const px=indic&&indic['_intl_'+a.ticker];
+    a._px=px||null;
+    a._usd=(a.qtd&&px)?a.qtd*px:(a.usd_investido||0);
+    usd+=a._usd;
+  }
+  return {usd,fx,brl:fx?usd*fx:null,custo:it.custo_brl_total||null};
+}
+
 function analisar(){
   const P=carteira.parametros,out={urg:[],op:[],reb:[]};
   let patr=0;
@@ -494,11 +508,13 @@ function render(an,falhas){
   const linhaProv=provisionado>0
     ?`<div class="d pos">+ ${brl(provisionado,2)} provisionados a receber</div>`:'';
   const resv=(carteira.reserva||[]).reduce((s,r)=>s+r.valor,0);
-  const linhaDet=resv>0
-    ?`bolsa ${brl(an.patr-an.vrf,2)} · tesouro ${brl(an.vrf,2)} · reserva ${brl(resv,2)}`
-    :`bolsa ${brl(an.patr-an.vrf,2)} · tesouro ${brl(an.vrf,2)}`;
+  const intl=intlInfo();
+  let linhaDet=`bolsa ${brl(an.patr-an.vrf,2)} · tesouro ${brl(an.vrf,2)}`;
+  if(resv>0)linhaDet+=` · reserva ${brl(resv,2)}`;
+  if(intl)linhaDet+=` · internacional ${intl.brl?brl(intl.brl,2):'US$ '+num2(intl.usd)}`;
+  const totalG=an.patr+resv+(intl&&intl.brl?intl.brl:0);
   $('metrics').innerHTML=
-    `<div class="mcard"><div class="l">Patrimônio total</div><div class="v">${brl(an.patr+resv,2)}</div><div class="d">${linhaDet}</div>${linhaProv}</div>`+
+    `<div class="mcard"><div class="l">Patrimônio total</div><div class="v">${brl(totalG,2)}</div><div class="d">${linhaDet}</div>${linhaProv}</div>`+
     `<div class="mcard"><div class="l">Resultado na bolsa</div><div class="v ${cls}">${brl(res,2)}</div><div class="d ${cls}">${pct(res/custo)} sobre o custo (sem contar dividendos)</div></div>`;
   let al='';
   if(an.op.length)al+=`<div class="al op"><div class="h">Zona de compra</div>`
@@ -532,6 +548,20 @@ function renderAssets(an){
     h+=`<div class="gt"><b>Reserva de emergência</b> <span>· ${brl(tr,2)} (fora do rebalanceamento)</span></div><div class="tblw"><table><tr><th>Onde</th><th>Valor</th></tr>`;
     for(const r of carteira.reserva)h+=`<tr><td>${r.nome}</td><td>${brl(r.valor,2)}</td></tr>`;
     h+='</table></div>';
+  }
+  const intl=intlInfo();
+  if(intl){
+    h+=`<div class="gt"><b>Internacional</b> <span>· US$ ${num2(intl.usd)}${intl.brl?' ≈ '+brl(intl.brl,2):''}${intl.fx?' (dólar '+num2(intl.fx)+')':''}</span></div>`;
+    h+='<div class="tblw"><table><tr><th>Ativo</th><th>Qtd</th><th>Preço US$</th><th>Valor US$</th></tr>';
+    for(const a of(carteira.internacional.ativos||[]))
+      h+=`<tr><td>${a.ticker}</td><td>${a.qtd??'—'}</td><td>${a._px?num2(a._px):'—'}</td><td>${num2(a._usd)}</td></tr>`;
+    if(carteira.internacional.caixa_usd)
+      h+=`<tr><td>Caixa (conta int.)</td><td>—</td><td>—</td><td>${num2(carteira.internacional.caixa_usd)}</td></tr>`;
+    h+='</table></div>';
+    if(intl.custo&&intl.brl){
+      const res=intl.brl-intl.custo;
+      h+=`<p class="cap">Custo total: ${brl(intl.custo,2)} → hoje ${brl(intl.brl,2)} (<span class="${res>=0?'pos':'neg'}">${res>=0?'+':''}${brl(res,2)}</span>, já incluindo câmbio, IOF e corretagem)</p>`;
+    }
   }
   $('assets').innerHTML=h;
 }
@@ -725,6 +755,13 @@ function renderEdit(){
     carteira.reserva.forEach((r,i)=>{h+=`<tr><td>${r.nome}</td><td>${money(`e-rsv-${i}`,r.valor,110)}</td></tr>`});
     h+='</table></div>';
   }
+  if(carteira.internacional){
+    const it=carteira.internacional;
+    h+='<div class="tblw"><table><tr><th>Internacional</th><th>Qtd (fração)</th><th>US$ investido</th></tr>';
+    (it.ativos||[]).forEach((a,i)=>{h+=`<tr><td>${a.ticker}</td><td><input id="e-iq-${i}" type="number" step="any" value="${a.qtd??''}" placeholder="ex.: 0,0885"></td><td>${money(`e-iv-${i}`,a.usd_investido||0)}</td></tr>`});
+    h+=`<tr><td>Caixa US$</td><td>—</td><td>${money('e-icx',it.caixa_usd||0)}</td></tr>`;
+    h+='</table></div>';
+  }
   h+='<div id="soma-live" style="font-size:.85rem;font-weight:700;margin-top:8px"></div>';
   $('edit-area').innerHTML=h;
   calcMetas();
@@ -757,6 +794,14 @@ async function saveCarteira(){
     carteira.ativos_bolsa.forEach((a,i)=>{a.qtd=parseFloat($(`e-q-${i}`).value)||a.qtd;a.pm=moneyVal($(`e-p-${i}`))||a.pm;a.meta_pct=Math.round((parseFloat($(`e-m-${i}`).value)||0)*10)/1000;soma+=a.meta_pct});
     carteira.renda_fixa.forEach((rf,i)=>{rf.valor=moneyVal($(`e-rv-${i}`))||rf.valor;rf.meta_pct=Math.round((parseFloat($(`e-rm-${i}`).value)||0)*10)/1000;soma+=rf.meta_pct});
     (carteira.reserva||[]).forEach((r,i)=>{const el=$(`e-rsv-${i}`);if(el)r.valor=moneyVal(el)||r.valor});
+    if(carteira.internacional){
+      (carteira.internacional.ativos||[]).forEach((a,i)=>{
+        const q=$(`e-iq-${i}`),v=$(`e-iv-${i}`);
+        if(q)a.qtd=q.value?parseFloat(q.value):null;
+        if(v)a.usd_investido=moneyVal(v)||a.usd_investido;
+      });
+      const cx=$('e-icx');if(cx)carteira.internacional.caixa_usd=moneyVal(cx);
+    }
     $('soma-metas').textContent=Math.abs(soma-1)>.005?`Atenção: metas somam ${pct(soma,1)} (ideal 100%)`:'';
     await salvarCarteiraArquivo();
     toast('Carteira salva no GitHub');
@@ -854,6 +899,7 @@ async function runIA(){
       +`REGRAS DE TOM (obrigatorias): o investidor pediu explicitamente sinceridade brutal. NAO elogie para agradar. NAO suavize problemas. Se um ativo esta ruim, diga que esta ruim e por que. Se a carteira perde do CDI, diga com todas as letras. Aponte contradicoes entre o objetivo declarado e a alocacao real. Numeros antes de adjetivos. Zero tom motivacional ou frases de consolo. Elogie APENAS o que os numeros sustentarem. Se a fórmula/indicador nao capturar um risco (ex.: yield alto com cota derretendo = possivel renda que corroi o principal), avise.\n\n`
       +`CARTEIRA (investimentos ${brl(an.patr,2)}):\n${pos}\n`
       +`Tesouro Direto: ${brl(an.vrf,2)} (IPCA+ 2074 meta 13%, Selic 2028 meta 7%).\n`
+      +(intlInfo()?`INTERNACIONAL: US$ ${num2(intlInfo().usd)} (NVDA fracionada + caixa; custo total R$ 100 incluindo cambio, IOF e corretagem de US$ 1 sobre US$ 15 investidos = 6,7% de custo de entrada).\n`:'')
       +((carteira.reserva&&carteira.reserva.length)
         ?`RESERVA DE EMERGENCIA (fora do rebalanceamento, rende ~CDI com liquidez diaria): `
          +carteira.reserva.map(r=>`${r.nome} ${brl(r.valor,2)}`).join('; ')

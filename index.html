@@ -102,6 +102,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
 .atrk{position:relative;height:9px;border-radius:5px;background:#233129}
 .afill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--mint);transition:width .5s ease}
 .afill.low{background:#EF9F27}
+.afill.intl{background:#93C5FD}
 .amark{position:absolute;top:-3px;bottom:-3px;width:2px;background:#E8F2ED;opacity:.8;border-radius:1px}
 .mgrid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
 .mgrid3 .mcard{padding:10px 12px}
@@ -716,7 +717,20 @@ function renderAloc(an){
       +`<div class="atrk"><div class="afill${low?' low':''}" style="width:${(r.at/mx*100).toFixed(1)}%"></div>`
       +`<div class="amark" style="left:${(r.mt/mx*100).toFixed(1)}%"></div></div></div>`;
   }).join('')
-  +'<div class="cap" style="margin:8px 0 0">Barra = alocação atual · traço = meta · <span style="color:#EF9F27">laranja</span> = abaixo da meta (prioridade de aporte)</div></div>';
+  +(function(){
+    const it=intlInfo();
+    if(!it)return '';
+    const totalG=an.patr+(it.brl||0);
+    let hh='<div class="sect-div" style="margin:12px 0 8px"></div>';
+    for(const a of(carteira.internacional.ativos||[])){
+      const vb=it.fx?a._usd*it.fx:null;
+      const p=vb!=null?vb/totalG:null;
+      hh+=`<div class="arow"><div class="alab"><b>${a.ticker} 🌎</b><span>${p!=null?pct(p):'US$ '+num2(a._usd)} <span style="opacity:.65">· internacional, sem meta</span></span></div>`
+        +`<div class="atrk"><div class="afill intl" style="width:${p!=null?Math.max(1.5,p/mx*100).toFixed(1):1.5}%"></div></div></div>`;
+    }
+    return hh;
+  })()
+  +'<div class="cap" style="margin:8px 0 0">Barra = alocação atual · traço = meta · <span style="color:#EF9F27">laranja</span> = abaixo da meta (prioridade de aporte) · <span style="color:#93C5FD">azul</span> = internacional (fora do rebalanceamento)</div></div>';
 }
 
 function renderCharts(an){
@@ -899,7 +913,16 @@ async function runIA(){
       +`REGRAS DE TOM (obrigatorias): o investidor pediu explicitamente sinceridade brutal. NAO elogie para agradar. NAO suavize problemas. Se um ativo esta ruim, diga que esta ruim e por que. Se a carteira perde do CDI, diga com todas as letras. Aponte contradicoes entre o objetivo declarado e a alocacao real. Numeros antes de adjetivos. Zero tom motivacional ou frases de consolo. Elogie APENAS o que os numeros sustentarem. Se a fórmula/indicador nao capturar um risco (ex.: yield alto com cota derretendo = possivel renda que corroi o principal), avise.\n\n`
       +`CARTEIRA (investimentos ${brl(an.patr,2)}):\n${pos}\n`
       +`Tesouro Direto: ${brl(an.vrf,2)} (IPCA+ 2074 meta 13%, Selic 2028 meta 7%).\n`
-      +(intlInfo()?`INTERNACIONAL: US$ ${num2(intlInfo().usd)} (NVDA fracionada + caixa; custo total R$ 100 incluindo cambio, IOF e corretagem de US$ 1 sobre US$ 15 investidos = 6,7% de custo de entrada).\n`:'')
+      +(function(){
+        const it=intlInfo();
+        if(!it)return '';
+        const its=(carteira.internacional.ativos||[]).map(a=>
+          `${a.ticker}${a.nome?' ('+a.nome+')':''}${a.qtd?', '+a.qtd+' fracoes':''}: US$ ${num2(a._usd)}${a._px?' a US$ '+num2(a._px)+'/acao':''}`).join('; ');
+        return `INTERNACIONAL (posicoes em dolar, fora do rebalanceamento): ${its}`
+          +`; caixa US$ ${num2(carteira.internacional.caixa_usd||0)}. Total US$ ${num2(it.usd)}${it.brl?' ≈ '+brl(it.brl,2):''}`
+          +`${it.custo?'; custo total de entrada '+brl(it.custo,2)+' (cambio, IOF e corretagens ja inclusos)':''}. `
+          +`Analise tambem estas posicoes estrangeiras com a mesma franqueza: papel na carteira, risco de empresa unica vs indice (ja ha IVVB11), impacto do cambio, e custo de corretagem fixa sobre aportes pequenos.\n`;
+      })()
       +((carteira.reserva&&carteira.reserva.length)
         ?`RESERVA DE EMERGENCIA (fora do rebalanceamento, rende ~CDI com liquidez diaria): `
          +carteira.reserva.map(r=>`${r.nome} ${brl(r.valor,2)}`).join('; ')

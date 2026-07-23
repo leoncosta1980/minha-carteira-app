@@ -38,6 +38,7 @@ button:active{transform:scale(.97)}
 .mcard .rw{display:flex;justify-content:space-between;font-size:.72rem;color:var(--mut);line-height:1.7}
 .mcard .rw b{color:var(--tx);font-weight:600}
 .mcard .rw b.pos{color:var(--mint)}
+.mcard .rw b.neg{color:#F87171}
 .pos{color:var(--mint)}.neg{color:var(--red)}
 .al{border-radius:12px;padding:11px 14px;margin:8px 0;font-size:.86rem;border:1px solid}
 .al .h{font-weight:700;font-size:.76rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
@@ -243,7 +244,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div class="chart-box" style="text-align:center;margin-top:16px">
     <img src="icone-192.png" style="width:52px;height:52px;border-radius:13px" alt="">
     <p style="font-weight:700;margin:8px 0 2px">Minha Carteira</p>
-    <p class="cap" style="margin:0">Versão 2.2.1 · julho de 2026</p>
+    <p class="cap" style="margin:0">Versão 2.2.2 · julho de 2026</p>
     <p class="cap" style="margin:8px 0 0">Desenvolvido por <b>Leonardo de Oliveira da Costa</b></p>
     <p class="cap" style="margin:2px 0 0">Dados: brapi.dev · IA: Google Gemini · Hospedagem: GitHub Pages</p>
   </div>
@@ -520,7 +521,16 @@ function render(an,falhas){
   if(provisionado>0)rws+=`<div class="rw"><span>A receber</span><b class="pos">+ ${brl(provisionado,2)}</b></div>`;
   $('metrics').innerHTML=
     `<div class="mcard"><div class="l">Patrimônio total</div><div class="v">${brl(totalG,2)}</div><div class="rows">${rws}</div></div>`+
-    `<div class="mcard"><div class="l">Resultado na bolsa</div><div class="v ${cls}">${brl(res,2)}</div><div class="d ${cls}">${pct(res/custo)} sobre o custo (sem contar dividendos)</div></div>`;
+    (function(){
+      const totalProv=((prov&&prov.eventos)||[]).reduce((s,e)=>s+e.valor,0);
+      const resTot=res+totalProv,clsT=resTot>=0?'pos':'neg';
+      return `<div class="mcard"><div class="l">Resultado na bolsa</div><div class="v ${clsT}">${brl(resTot,2)}</div>`
+        +`<div class="rows">`
+        +`<div class="rw"><span>Variação de preço</span><b class="${cls}">${brl(res,2)}</b></div>`
+        +`<div class="rw"><span>Dividendos recebidos</span><b class="pos">+ ${brl(totalProv,2)}</b></div>`
+        +`<div class="rw"><span>Sobre o custo</span><b class="${clsT}">${pct(resTot/custo)}</b></div>`
+        +`</div></div>`;
+    })();
   let al='';
   if(an.op.length)al+=`<div class="al op"><div class="h">Zona de compra</div>`
     +an.op.map(o=>`<div class="zrow"><div><div class="zt"><b>${o.t}</b>${o.forte?'<span class="chip">SINAL FORTE</span>':''}</div>`

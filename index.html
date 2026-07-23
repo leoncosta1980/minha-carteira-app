@@ -243,7 +243,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div class="chart-box" style="text-align:center;margin-top:16px">
     <img src="icone-192.png" style="width:52px;height:52px;border-radius:13px" alt="">
     <p style="font-weight:700;margin:8px 0 2px">Minha Carteira</p>
-    <p class="cap" style="margin:0">Versão 2.2.0 · julho de 2026</p>
+    <p class="cap" style="margin:0">Versão 2.2.1 · julho de 2026</p>
     <p class="cap" style="margin:8px 0 0">Desenvolvido por <b>Leonardo de Oliveira da Costa</b></p>
     <p class="cap" style="margin:2px 0 0">Dados: brapi.dev · IA: Google Gemini · Hospedagem: GitHub Pages</p>
   </div>
@@ -987,6 +987,13 @@ async function refresh(force){
     noticias=nj?JSON.parse(nj.text):null;
     const ij=await ghGet('indicadores.json');
     indic=ij?JSON.parse(ij.text):null;
+    // Cambio de reserva: se o robo ainda nao publicou, usa a API publica do BCE
+    if(carteira.internacional&&!(indic&&indic._usdbrl)){
+      try{
+        const rf=await fetch('https://api.frankfurter.app/latest?from=USD&to=BRL');
+        if(rf.ok){const j=await rf.json();indic=indic||{};indic._usdbrl=j.rates.BRL}
+      }catch(e){}
+    }
     const pj=await ghGet('proventos.json');
     prov=pj?JSON.parse(pj.text):null;
     const falhas=[];

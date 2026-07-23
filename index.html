@@ -34,6 +34,10 @@ button:active{transform:scale(.97)}
 .mcard .l{font-size:.68rem;color:var(--mut);text-transform:uppercase;letter-spacing:.06em}
 .mcard .v{font-size:1.3rem;font-weight:700}
 .mcard .d{font-size:.74rem;color:var(--mut)}
+.mcard .rows{margin-top:7px;border-top:1px solid var(--border);padding-top:6px}
+.mcard .rw{display:flex;justify-content:space-between;font-size:.72rem;color:var(--mut);line-height:1.7}
+.mcard .rw b{color:var(--tx);font-weight:600}
+.mcard .rw b.pos{color:var(--mint)}
 .pos{color:var(--mint)}.neg{color:var(--red)}
 .al{border-radius:12px;padding:11px 14px;margin:8px 0;font-size:.86rem;border:1px solid}
 .al .h{font-weight:700;font-size:.76rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
@@ -239,7 +243,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div class="chart-box" style="text-align:center;margin-top:16px">
     <img src="icone-192.png" style="width:52px;height:52px;border-radius:13px" alt="">
     <p style="font-weight:700;margin:8px 0 2px">Minha Carteira</p>
-    <p class="cap" style="margin:0">Versão 2.0.0 · julho de 2026</p>
+    <p class="cap" style="margin:0">Versão 2.2.0 · julho de 2026</p>
     <p class="cap" style="margin:8px 0 0">Desenvolvido por <b>Leonardo de Oliveira da Costa</b></p>
     <p class="cap" style="margin:2px 0 0">Dados: brapi.dev · IA: Google Gemini · Hospedagem: GitHub Pages</p>
   </div>
@@ -506,16 +510,16 @@ function render(an,falhas){
   const custo=carteira.ativos_bolsa.reduce((s,a)=>s+a.qtd*a.pm,0);
   const res=an.patr-an.vrf-custo,cls=res>=0?'pos':'neg';
   const provisionado=((prov&&prov.previstos)||[]).reduce((s,e)=>s+e.valor,0);
-  const linhaProv=provisionado>0
-    ?`<div class="d pos">+ ${brl(provisionado,2)} provisionados a receber</div>`:'';
   const resv=(carteira.reserva||[]).reduce((s,r)=>s+r.valor,0);
   const intl=intlInfo();
-  let linhaDet=`bolsa ${brl(an.patr-an.vrf,2)} · tesouro ${brl(an.vrf,2)}`;
-  if(resv>0)linhaDet+=` · reserva ${brl(resv,2)}`;
-  if(intl)linhaDet+=` · internacional ${intl.brl?brl(intl.brl,2):'US$ '+num2(intl.usd)}`;
   const totalG=an.patr+resv+(intl&&intl.brl?intl.brl:0);
+  let rws=`<div class="rw"><span>Bolsa Brasil</span><b>${brl(an.patr-an.vrf,2)}</b></div>`
+    +`<div class="rw"><span>Tesouro Direto</span><b>${brl(an.vrf,2)}</b></div>`;
+  if(resv>0)rws+=`<div class="rw"><span>Reserva</span><b>${brl(resv,2)}</b></div>`;
+  if(intl)rws+=`<div class="rw"><span>Internacional 🌎</span><b>${intl.brl?brl(intl.brl,2):'US$ '+num2(intl.usd)}</b></div>`;
+  if(provisionado>0)rws+=`<div class="rw"><span>A receber</span><b class="pos">+ ${brl(provisionado,2)}</b></div>`;
   $('metrics').innerHTML=
-    `<div class="mcard"><div class="l">Patrimônio total</div><div class="v">${brl(totalG,2)}</div><div class="d">${linhaDet}</div>${linhaProv}</div>`+
+    `<div class="mcard"><div class="l">Patrimônio total</div><div class="v">${brl(totalG,2)}</div><div class="rows">${rws}</div></div>`+
     `<div class="mcard"><div class="l">Resultado na bolsa</div><div class="v ${cls}">${brl(res,2)}</div><div class="d ${cls}">${pct(res/custo)} sobre o custo (sem contar dividendos)</div></div>`;
   let al='';
   if(an.op.length)al+=`<div class="al op"><div class="h">Zona de compra</div>`
@@ -553,11 +557,14 @@ function renderAssets(an){
   const intl=intlInfo();
   if(intl){
     h+=`<div class="gt"><b>Internacional</b> <span>· US$ ${num2(intl.usd)}${intl.brl?' ≈ '+brl(intl.brl,2):''}${intl.fx?' (dólar '+num2(intl.fx)+')':''}</span></div>`;
-    h+='<div class="tblw"><table><tr><th>Ativo</th><th>Qtd</th><th>Preço US$</th><th>Valor US$</th></tr>';
-    for(const a of(carteira.internacional.ativos||[]))
-      h+=`<tr><td>${a.ticker}</td><td>${a.qtd??'—'}</td><td>${a._px?num2(a._px):'—'}</td><td>${num2(a._usd)}</td></tr>`;
+    h+='<div class="tblw"><table><tr><th>Ativo</th><th>Qtd</th><th>PM US$</th><th>Atual US$</th><th>Valor US$</th><th>Var</th></tr>';
+    for(const a of(carteira.internacional.ativos||[])){
+      const v=(a._px&&a.pm_usd)?(a._px-a.pm_usd)/a.pm_usd:null;
+      h+=`<tr><td>${a.ticker}</td><td>${a.qtd??'—'}</td><td>${a.pm_usd?num2(a.pm_usd):'—'}</td><td>${a._px?num2(a._px):'—'}</td><td>${num2(a._usd)}</td>`
+        +`<td class="${v==null?'':(v>=0?'pos':'neg')}">${v!=null?pct(v):'—'}</td></tr>`;
+    }
     if(carteira.internacional.caixa_usd)
-      h+=`<tr><td>Caixa (conta int.)</td><td>—</td><td>—</td><td>${num2(carteira.internacional.caixa_usd)}</td></tr>`;
+      h+=`<tr><td>Caixa (conta int.)</td><td>—</td><td>—</td><td>—</td><td>${num2(carteira.internacional.caixa_usd)}</td><td>—</td></tr>`;
     h+='</table></div>';
     if(intl.custo&&intl.brl){
       const res=intl.brl-intl.custo;
@@ -771,8 +778,8 @@ function renderEdit(){
   }
   if(carteira.internacional){
     const it=carteira.internacional;
-    h+='<div class="tblw"><table><tr><th>Internacional</th><th>Qtd (fração)</th><th>US$ investido</th></tr>';
-    (it.ativos||[]).forEach((a,i)=>{h+=`<tr><td>${a.ticker}</td><td><input id="e-iq-${i}" type="number" step="any" value="${a.qtd??''}" placeholder="ex.: 0,0885"></td><td>${money(`e-iv-${i}`,a.usd_investido||0)}</td></tr>`});
+    h+='<div class="tblw"><table><tr><th>Internacional</th><th>Qtd (fração)</th><th>PM US$</th><th>US$ aplicado</th></tr>';
+    (it.ativos||[]).forEach((a,i)=>{h+=`<tr><td>${a.ticker}</td><td><input id="e-iq-${i}" type="number" step="any" value="${a.qtd??''}" placeholder="ex.: 0,07235"></td><td>${money(`e-ipm-${i}`,a.pm_usd||0)}</td><td>${money(`e-iv-${i}`,a.usd_investido||0)}</td></tr>`});
     h+=`<tr><td>Caixa US$</td><td>—</td><td>${money('e-icx',it.caixa_usd||0)}</td></tr>`;
     h+='</table></div>';
   }
@@ -810,9 +817,10 @@ async function saveCarteira(){
     (carteira.reserva||[]).forEach((r,i)=>{const el=$(`e-rsv-${i}`);if(el)r.valor=moneyVal(el)||r.valor});
     if(carteira.internacional){
       (carteira.internacional.ativos||[]).forEach((a,i)=>{
-        const q=$(`e-iq-${i}`),v=$(`e-iv-${i}`);
+        const q=$(`e-iq-${i}`),v=$(`e-iv-${i}`),pmu=$(`e-ipm-${i}`);
         if(q)a.qtd=q.value?parseFloat(q.value):null;
         if(v)a.usd_investido=moneyVal(v)||a.usd_investido;
+        if(pmu)a.pm_usd=moneyVal(pmu)||a.pm_usd;
       });
       const cx=$('e-icx');if(cx)carteira.internacional.caixa_usd=moneyVal(cx);
     }
@@ -917,7 +925,7 @@ async function runIA(){
         const it=intlInfo();
         if(!it)return '';
         const its=(carteira.internacional.ativos||[]).map(a=>
-          `${a.ticker}${a.nome?' ('+a.nome+')':''}${a.qtd?', '+a.qtd+' fracoes':''}: US$ ${num2(a._usd)}${a._px?' a US$ '+num2(a._px)+'/acao':''}`).join('; ');
+          `${a.ticker}${a.nome?' ('+a.nome+')':''}${a.qtd?', '+a.qtd+' fracoes':''}${a.pm_usd?', PM US$ '+num2(a.pm_usd):''}: US$ ${num2(a._usd)}${a._px?' a US$ '+num2(a._px)+'/acao':''}`).join('; ');
         return `INTERNACIONAL (posicoes em dolar, fora do rebalanceamento): ${its}`
           +`; caixa US$ ${num2(carteira.internacional.caixa_usd||0)}. Total US$ ${num2(it.usd)}${it.brl?' ≈ '+brl(it.brl,2):''}`
           +`${it.custo?'; custo total de entrada '+brl(it.custo,2)+' (cambio, IOF e corretagens ja inclusos)':''}. `

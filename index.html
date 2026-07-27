@@ -244,7 +244,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div class="chart-box" style="text-align:center;margin-top:16px">
     <img src="icone-192.png" style="width:52px;height:52px;border-radius:13px" alt="">
     <p style="font-weight:700;margin:8px 0 2px">Minha Carteira</p>
-    <p class="cap" style="margin:0">Versão 2.2.2 · julho de 2026</p>
+    <p class="cap" style="margin:0">Versão 2.2.3 · julho de 2026</p>
     <p class="cap" style="margin:8px 0 0">Desenvolvido por <b>Leonardo de Oliveira da Costa</b></p>
     <p class="cap" style="margin:2px 0 0">Dados: brapi.dev · IA: Google Gemini · Hospedagem: GitHub Pages</p>
   </div>
@@ -317,6 +317,17 @@ const ghH=()=>({Authorization:'Bearer '+cfg.gh,Accept:'application/vnd.github+js
 const b64dec=s=>new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\n/g,'')),c=>c.charCodeAt(0)));
 const b64enc=s=>btoa(unescape(encodeURIComponent(s)));
 async function ghGet(path){const r=await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}?t=${Date.now()}`,{headers:ghH()});if(!r.ok)return null;const j=await r.json();return{text:b64dec(j.content),sha:j.sha}}
+// Le JSON tolerando NaN/Infinity gravados por engano (viram null)
+function jsonSeguro(txt,rotulo){
+  try{return JSON.parse(txt)}catch(e){
+    try{
+      const limpo=txt.replace(/:\s*(NaN|-?Infinity)\s*([,}\]])/g,': null$2');
+      const o=JSON.parse(limpo);
+      console.warn(rotulo+': valores invalidos ignorados');
+      return o;
+    }catch(e2){toast(rotulo+' com formato inválido — ignorado');return null}
+  }
+}
 async function ghPut(path,text,msg){const cur=await ghGet(path);const body={message:msg,content:b64enc(text)};if(cur)body.sha=cur.sha;const r=await fetch(`https://api.github.com/repos/${cfg.repo}/contents/${path}`,{method:'PUT',headers:{...ghH(),'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(`GitHub recusou (HTTP ${r.status}) ${j.message||''}`)}}
 
 const NIVEIS=['range=3mo&interval=1d&fundamental=true&dividends=true','range=3mo&interval=1d',''];
@@ -990,13 +1001,14 @@ async function refresh(force){
   try{
     const cj=await ghGet('carteira.json');
     if(!cj)throw new Error('Não li o carteira.json — confira repo e token em ⚙');
-    carteira=JSON.parse(cj.text);
+    carteira=jsonSeguro(cj.text,'carteira.json');
+    if(!carteira)throw new Error('carteira.json inválido');
     const hc=await ghGet('historico.csv');
     hist=hc?hc.text.trim().split('\n').slice(1).map(l=>{const[a,b]=l.split(',');return[a,parseFloat(b)]}):null;
     const nj=await ghGet('noticias.json');
-    noticias=nj?JSON.parse(nj.text):null;
+    noticias=nj?jsonSeguro(nj.text,'noticias.json'):null;
     const ij=await ghGet('indicadores.json');
-    indic=ij?JSON.parse(ij.text):null;
+    indic=ij?jsonSeguro(ij.text,'indicadores.json'):null;
     // Cambio de reserva: se o robo ainda nao publicou, usa a API publica do BCE
     if(carteira.internacional&&!(indic&&indic._usdbrl)){
       try{
@@ -1005,7 +1017,7 @@ async function refresh(force){
       }catch(e){}
     }
     const pj=await ghGet('proventos.json');
-    prov=pj?JSON.parse(pj.text):null;
+    prov=pj?jsonSeguro(pj.text,'proventos.json'):null;
     const falhas=[];
     await Promise.all(carteira.ativos_bolsa.map(async a=>{const q=await quote(a.ticker);if(q)quotes[a.ticker]=q;else falhas.push(a.ticker)}));
     render(analisar(),falhas);

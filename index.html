@@ -244,7 +244,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div class="chart-box" style="text-align:center;margin-top:16px">
     <img src="icone-192.png" style="width:52px;height:52px;border-radius:13px" alt="">
     <p style="font-weight:700;margin:8px 0 2px">Minha Carteira</p>
-    <p class="cap" style="margin:0">Versão 2.3.0 · julho de 2026</p>
+    <p class="cap" style="margin:0">Versão 2.3.1 · julho de 2026</p>
     <p class="cap" style="margin:8px 0 0">Desenvolvido por <b>Leonardo de Oliveira da Costa</b></p>
     <p class="cap" style="margin:2px 0 0">Dados: brapi.dev · IA: Google Gemini · Hospedagem: GitHub Pages</p>
   </div>
@@ -666,6 +666,19 @@ function renderRenda(){
       +`<span class="cap" style="margin:0 0 0 auto">${brl(somaPer,2)} no período</span></div>`
       +`<div class="rc">${cols}</div></div>`;
   }
+  // Rendimento por cota e yield da distribuicao (declarados antes do uso)
+  const ativoDe=t=>carteira.ativos_bolsa.find(a=>a.ticker===t);
+  const porCota=e=>{
+    if(e.por_cota)return e.por_cota;
+    const a=ativoDe(e.ticker);
+    return (a&&a.qtd)?e.valor/(e.cotas||a.qtd):null;
+  };
+  const yieldDist=e=>{
+    const pc=porCota(e),a=ativoDe(e.ticker);
+    if(!pc||!a)return null;
+    return {pc,atual:a._p?pc/a._p:null,custo:a.pm?pc/a.pm:null};
+  };
+
   // Custo por ticker (qtd x PM) para calcular o yield on cost
   const custoDe=t=>{
     if(t==='Tesouro')return carteira.renda_fixa.reduce((s,r)=>s+r.valor,0);
@@ -716,19 +729,6 @@ function renderRenda(){
   // A receber (lancamentos previstos, ordenados por data)
   const prevs=(prov.previstos||[]).slice().sort((a,b)=>a.data.localeCompare(b.data));
   const somaPrev=prevs.reduce((s,e)=>s+e.valor,0);
-  // Rendimento por cota e yield da distribuicao
-  const ativoDe=t=>carteira.ativos_bolsa.find(a=>a.ticker===t);
-  const porCota=e=>{
-    if(e.por_cota)return e.por_cota;
-    const a=ativoDe(e.ticker);
-    return (a&&a.qtd)?e.valor/(e.cotas||a.qtd):null;
-  };
-  const yieldDist=e=>{
-    const pc=porCota(e),a=ativoDe(e.ticker);
-    if(!pc||!a)return null;
-    return {pc,atual:a._p?pc/a._p:null,custo:a.pm?pc/a.pm:null};
-  };
-
   const prevRows=prevs.map(e=>{
     const c=custoDe(e.ticker);
     const y=yieldDist(e);

@@ -244,7 +244,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div class="chart-box" style="text-align:center;margin-top:16px">
     <img src="icone-192.png" style="width:52px;height:52px;border-radius:13px" alt="">
     <p style="font-weight:700;margin:8px 0 2px">Minha Carteira</p>
-    <p class="cap" style="margin:0">Versão 2.2.3 · julho de 2026</p>
+    <p class="cap" style="margin:0">Versão 2.3.0 · julho de 2026</p>
     <p class="cap" style="margin:8px 0 0">Desenvolvido por <b>Leonardo de Oliveira da Costa</b></p>
     <p class="cap" style="margin:2px 0 0">Dados: brapi.dev · IA: Google Gemini · Hospedagem: GitHub Pages</p>
   </div>
@@ -688,18 +688,53 @@ function renderRenda(){
   gYieldMap=yieldM;
   const ats=Object.entries(porAt).sort((a,b)=>(yieldM[b[0]]||0)-(yieldM[a[0]]||0));
   const mxy=ats.length?Math.max(...ats.map(([t])=>yieldM[t]||0)):1;
+  const ultimoDe={};
+  for(const e of ev){if(!ultimoDe[e.ticker]||e.data>ultimoDe[e.ticker].data)ultimoDe[e.ticker]=e}
   const rows=ats.map(([t,v])=>{
-    const y=yieldM[t]||0;
+    const y=yieldM[t]||0,u=ultimoDe[t],yd=u?yieldDist(u):null;
+    const linhaU=yd&&yd.pc
+      ?`<div class="zsub" style="margin-top:3px">último ${u.data.slice(8,10)}/${u.data.slice(5,7)}: `
+        +`R$ ${yd.pc.toLocaleString('pt-BR',{minimumFractionDigits:4,maximumFractionDigits:4})}/cota`
+        +(yd.atual?` · ${(yd.atual*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}% do preço`:'')
+        +(yd.custo?` · ${(yd.custo*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}% do meu PM`:'')
+        +`</div>`:'';
     return `<div class="arow"><div class="alab"><b>${t}</b><span><b>${(y*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}%/mês</b> · ${brl(v,2)} no período</span></div>`
-      +`<div class="atrk"><div class="afill" style="width:${mxy?(y/mxy*100).toFixed(1):0}%"></div></div></div>`;
+      +`<div class="atrk"><div class="afill" style="width:${mxy?(y/mxy*100).toFixed(1):0}%"></div></div>${linhaU}</div>`;
+  }).join('');
+
+  // Historico de distribuicoes por cota (ultimas 15)
+  const ultimas=ev.slice().sort((a,b)=>b.data.localeCompare(a.data)).slice(0,15);
+  const distRows=ultimas.map(e=>{
+    const y=yieldDist(e);
+    return `<div class="prow"><div class="inf"><b>${e.ticker}</b>`
+      +`<div class="sub">${e.data.split('-').reverse().join('/')}${e.cotas?' · '+e.cotas.toLocaleString('pt-BR')+' cotas':''}</div></div>`
+      +`<div class="rgt"><b>${y&&y.pc?'R$ '+y.pc.toLocaleString('pt-BR',{minimumFractionDigits:4,maximumFractionDigits:4})+'/cota':brl(e.valor,2)}</b>`
+      +`<div class="sub" style="opacity:.75">${y&&y.atual?(y.atual*100).toLocaleString('pt-BR',{maximumFractionDigits:2})+'% do preço':brl(e.valor,2)}`
+      +`${y&&y.custo?' · '+(y.custo*100).toLocaleString('pt-BR',{maximumFractionDigits:2})+'% do PM':''}</div></div></div>`;
   }).join('');
 
   // A receber (lancamentos previstos, ordenados por data)
   const prevs=(prov.previstos||[]).slice().sort((a,b)=>a.data.localeCompare(b.data));
   const somaPrev=prevs.reduce((s,e)=>s+e.valor,0);
+  // Rendimento por cota e yield da distribuicao
+  const ativoDe=t=>carteira.ativos_bolsa.find(a=>a.ticker===t);
+  const porCota=e=>{
+    if(e.por_cota)return e.por_cota;
+    const a=ativoDe(e.ticker);
+    return (a&&a.qtd)?e.valor/(e.cotas||a.qtd):null;
+  };
+  const yieldDist=e=>{
+    const pc=porCota(e),a=ativoDe(e.ticker);
+    if(!pc||!a)return null;
+    return {pc,atual:a._p?pc/a._p:null,custo:a.pm?pc/a.pm:null};
+  };
+
   const prevRows=prevs.map(e=>{
     const c=custoDe(e.ticker);
-    const pctPos=c>0?` · ${(e.valor/c*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}% da posição`:'';
+    const y=yieldDist(e);
+    const pctPos=y&&y.atual
+      ?` · R$ ${y.pc.toLocaleString('pt-BR',{minimumFractionDigits:4,maximumFractionDigits:4})}/cota · ${(y.atual*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}% do preço`
+      :(c>0?` · ${(e.valor/c*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}% da posição`:'');
     return `<div class="prow"><div class="inf"><b>${e.ticker}</b>`
     +`<div class="sub">${e.data.split('-').reverse().join('/')}${pctPos}</div></div>`
     +`<div class="rgt"><b>${brl(e.valor,2)}</b><div class="acts">`
@@ -731,7 +766,9 @@ function renderRenda(){
     <p class="cap">Previsto entra na lista "A receber"; ao cair na conta, toque em ✔ e ele passa a contar na renda.</p>
   </details>
   <details><summary>Renda por ativo</summary><div style="margin-top:8px">${rows}</div>
-  <div class="cap">Fonte: ${prov._fonte||'lançamentos'} · atualizado em ${prov._atualizado||''}</div></details>`;
+  <div class="cap">Fonte: ${prov._fonte||'lançamentos'} · atualizado em ${prov._atualizado||''}</div></details>
+  <details><summary>Distribuições por cota</summary><div style="margin-top:4px">${distRows}</div>
+  <div class="cap">Valor por cota = provento ÷ cotas na data · % = quanto o pagamento representa do preço da cota (yield da distribuição).</div></details>`;
 }
 
 function renderAloc(an){

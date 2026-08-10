@@ -244,7 +244,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div class="chart-box" style="text-align:center;margin-top:16px">
     <img src="icone-192.png" style="width:52px;height:52px;border-radius:13px" alt="">
     <p style="font-weight:700;margin:8px 0 2px">Minha Carteira</p>
-    <p class="cap" style="margin:0">Versão 2.4.0 · julho de 2026</p>
+    <p class="cap" style="margin:0">Versão 2.4.1 · julho de 2026</p>
     <p class="cap" style="margin:8px 0 0">Desenvolvido por <b>Leonardo de Oliveira da Costa</b></p>
     <p class="cap" style="margin:2px 0 0">Dados: brapi.dev · IA: Google Gemini · Hospedagem: GitHub Pages</p>
   </div>
@@ -1231,7 +1231,7 @@ async function exportarPDF(){
     y=doc.lastAutoTable.finalY+8;
   }
 
-  // Evolucao do patrimonio (ultimos pontos)
+  // Evolucao do patrimonio: tabela + grafico de linha vetorial
   if(hist&&hist.length>1){
     secao('Evolução do patrimônio');
     const pts=hist.slice(-8);
@@ -1240,7 +1240,55 @@ async function exportarPDF(){
       body:[pts.map(p=>brl(p[1],0))],
       styles:{fontSize:7,cellPadding:1.5,halign:'center'},
       headStyles:{fillColor:VERDE,textColor:255,fontSize:7},margin:{left:14,right:14}});
-    y=doc.lastAutoTable.finalY+8;
+    y=doc.lastAutoTable.finalY+6;
+
+    const serie=hist.slice(-60);
+    const GX=26,GY=y,GW=W-26-14,GH=45;          // area do grafico
+    if(GY+GH>272){doc.addPage();y=20}
+    const gy=(GY+GH>272)?20:GY;
+    const vals=serie.map(p=>p[1]);
+    let vmin=Math.min(...vals),vmax=Math.max(...vals);
+    const folga=(vmax-vmin)*0.15||Math.max(1,vmax*0.02);
+    vmin-=folga;vmax+=folga;
+    const px=i=>GX+(serie.length>1?i/(serie.length-1):0.5)*GW;
+    const py=v=>gy+GH-((v-vmin)/(vmax-vmin))*GH;
+
+    // area sob a curva (faixas finas e sobrepostas = preenchimento uniforme)
+    doc.setDrawColor(213,240,224);doc.setLineWidth(0.45);
+    for(let t=0;t<=GW*4;t++){
+      const xx=GX+t/4, f=(xx-GX)/GW*(serie.length-1);
+      const i0=Math.floor(f),i1=Math.min(serie.length-1,i0+1),fr=f-i0;
+      const v=vals[i0]+(vals[i1]-vals[i0])*fr;
+      doc.line(xx,py(v),xx,gy+GH);
+    }
+    // grade e rotulos do eixo Y (por cima da area, para nao sumirem)
+    doc.setDrawColor(198,216,206);doc.setLineWidth(0.12);
+    doc.setTextColor(...CINZA);doc.setFontSize(5.8);
+    for(let i=0;i<=3;i++){
+      const yy=gy+GH-(i/3)*GH,vv=vmin+(i/3)*(vmax-vmin);
+      doc.line(GX,yy,GX+GW,yy);
+      doc.text(brl(vv,0),GX-1.5,yy+1.2,{align:'right'});
+    }
+    // linha principal
+    doc.setDrawColor(22,163,74);doc.setLineWidth(0.7);
+    for(let i=1;i<serie.length;i++)doc.line(px(i-1),py(vals[i-1]),px(i),py(vals[i]));
+    // ponto final destacado
+    doc.setFillColor(22,163,74);doc.circle(px(serie.length-1),py(vals[serie.length-1]),0.9,'F');
+    // moldura
+    doc.setDrawColor(200,208,204);doc.setLineWidth(0.2);
+    doc.line(GX,gy+GH,GX+GW,gy+GH);
+    // datas no eixo X
+    doc.setTextColor(...CINZA);doc.setFontSize(5.8);
+    const marcas=[0,Math.floor((serie.length-1)/2),serie.length-1];
+    for(const i of [...new Set(marcas)]){
+      const dt=serie[i][0];
+      doc.text(dt.slice(8,10)+'/'+dt.slice(5,7),px(i),gy+GH+3.5,{align:'center'});
+    }
+    // variacao do periodo
+    const vi=vals[0],vf=vals[vals.length-1],dif=vf-vi;
+    doc.setFontSize(6.5);doc.setTextColor(dif>=0?22:200,dif>=0?163:60,dif>=0?74:60);
+    doc.text(`${dif>=0?'+':''}${brl(dif,2)} no período (${serie.length} dias)`,GX+GW,gy-1.5,{align:'right'});
+    y=gy+GH+9;
   }
 
   doc.setTextColor(...CINZA);doc.setFontSize(7);

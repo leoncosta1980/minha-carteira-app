@@ -244,7 +244,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div class="chart-box" style="text-align:center;margin-top:16px">
     <img src="icone-192.png" style="width:52px;height:52px;border-radius:13px" alt="">
     <p style="font-weight:700;margin:8px 0 2px">Minha Carteira</p>
-    <p class="cap" style="margin:0">Versão 2.3.1 · julho de 2026</p>
+    <p class="cap" style="margin:0">Versão 2.4.0 · julho de 2026</p>
     <p class="cap" style="margin:8px 0 0">Desenvolvido por <b>Leonardo de Oliveira da Costa</b></p>
     <p class="cap" style="margin:2px 0 0">Dados: brapi.dev · IA: Google Gemini · Hospedagem: GitHub Pages</p>
   </div>
@@ -742,16 +742,42 @@ function renderRenda(){
     +`<button class="mini" onclick="editProv(${e.id})" title="Editar">✎</button>`
     +`<button class="mini" onclick="delProv(${e.id})" title="Excluir">🗑</button></div></div></div>`;}).join('');
 
+  // Dois denominadores distintos, para nao confundir as leituras:
+  // 1) carteira investida (bolsa + tesouro, a custo) -> yield da estrategia
+  // 2) patrimonio total (inclui reserva e internacional) -> yield do bolso inteiro
   const custoBolsa=carteira.ativos_bolsa.reduce((s,a)=>s+a.qtd*a.pm,0)
     +carteira.renda_fixa.reduce((s,r)=>s+r.valor,0);
-  gYield=custoBolsa>0?(tot/nAno)/custoBolsa:0;
+  const itR=intlInfo();
+  const soBolsa=carteira.ativos_bolsa.reduce((s,a)=>s+a.qtd*a.pm,0);
+  const baseTotal=custoBolsa
+    +(carteira.reserva||[]).reduce((s,r)=>s+r.valor,0)
+    +((itR&&itR.custo)?itR.custo:0);
+  const mediaMes=tot/nAno;
+  gYield=custoBolsa>0?mediaMes/custoBolsa:0;          // projecao usa o da carteira
+  const yieldTotal=baseTotal>0?mediaMes/baseTotal:0;
+  const yieldPagadores=soBolsa>0?mediaMes/soBolsa:0;
+  // ultimo mes fechado com proventos
+  const mesesOrd=Object.keys(porMes).sort();
+  const ultMes=mesesOrd[mesesOrd.length-1];
+  const yieldUlt=(ultMes&&custoBolsa>0)?porMes[ultMes]/custoBolsa:0;
   const hoje=new Date().toISOString().slice(0,10);
   const opts=carteira.ativos_bolsa.map(a=>`<option>${a.ticker}</option>`).join('')+'<option>Tesouro</option>';
   $('renda').innerHTML=`<h2>Renda passiva</h2>
   <div class="mgrid3">
     <div class="mcard"><div class="l">No ano</div><div class="v pos">${brl(tot,2)}</div></div>
-    <div class="mcard"><div class="l">Média mensal</div><div class="v">${brl(tot/nAno,2)}</div><div class="d">≈ ${(custoBolsa>0?(tot/nAno)/custoBolsa*100:0).toLocaleString('pt-BR',{maximumFractionDigits:2})}%/mês s/ custo</div></div>
+    <div class="mcard"><div class="l">Média mensal</div><div class="v">${brl(mediaMes,2)}</div></div>
     <div class="mcard"><div class="l">Este mês</div><div class="v">${brl(esteMes,2)}</div></div>
+  </div>
+  <div class="mcard" style="margin:10px 0">
+    <div class="l">Yield da renda passiva</div>
+    <div class="rows" style="border-top:0;padding-top:2px">
+      <div class="rw"><span>Só ativos pagadores <span style="opacity:.7">(${brl(soBolsa,0)})</span></span><b class="pos">${(yieldPagadores*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}%/mês</b></div>
+      <div class="rw"><span>Carteira investida <span style="opacity:.7">(+ tesouro, ${brl(custoBolsa,0)})</span></span><b class="pos">${(gYield*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}%/mês</b></div>
+      <div class="rw"><span>Patrimônio total <span style="opacity:.7">(+ reserva, ${brl(baseTotal,0)})</span></span><b>${(yieldTotal*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}%/mês</b></div>
+      ${ultMes?`<div class="rw"><span>Último mês (${MN[+ultMes.slice(5,7)-1]}) s/ carteira</span><b class="pos">${(yieldUlt*100).toLocaleString('pt-BR',{maximumFractionDigits:2})}%/mês</b></div>`:''}
+      <div class="rw"><span>Equivalente anual (pagadores)</span><b class="pos">${((Math.pow(1+yieldPagadores,12)-1)*100).toLocaleString('pt-BR',{maximumFractionDigits:1})}% a.a.</b></div>
+    </div>
+    <p class="cap" style="margin:6px 0 0">Médias de ${nAno} ${nAno>1?'meses':'mês'} de ${ano}. O Tesouro e a reserva não distribuem proventos (rendem por dentro), por isso diluem o yield conforme entram na base.</p>
   </div>
   ${grafico}
   ${prevs.length?`<div class="al plan"><div class="h">A receber · ${brl(somaPrev,2)}</div>${prevRows}</div>`:''}
@@ -1084,8 +1110,12 @@ async function exportarPDF(){
   const ano=String(new Date().getFullYear());
   const rendaAno=ev.filter(e=>e.data.startsWith(ano)).reduce((s,e)=>s+e.valor,0);
   const resvPdf=(carteira.reserva||[]).reduce((s,r)=>s+r.valor,0);
-  const cards=[['Patrimônio total',brl(an.patr+resvPdf,2)],['Resultado na bolsa',brl(res,2)],
-    ['Renda passiva no ano',brl(rendaAno,2)],['Yield médio',(gYield*100).toFixed(2)+'%/mês']];
+  const totalProvPdf=ev.reduce((s,e)=>s+e.valor,0);
+  const resTotPdf=res+totalProvPdf;
+  const cards=[['Patrimônio total',brl(an.patr+resvPdf,2)],
+    ['Resultado c/ dividendos',brl(resTotPdf,2)],
+    ['Renda passiva no ano',brl(rendaAno,2)],
+    ['Yield carteira',(gYield*100).toFixed(2)+'%/mês']];
   let x=14;
   for(const[l,v]of cards){
     doc.setFillColor(241,247,244);doc.roundedRect(x,36,44,18,2,2,'F');
@@ -1095,15 +1125,30 @@ async function exportarPDF(){
     x+=46.5;
   }
 
-  // Tabela de ativos
+  // Composicao do patrimonio (linha resumo)
+  const itPdf=intlInfo();
+  doc.setTextColor(...CINZA);doc.setFontSize(7.5);
+  doc.text(`Bolsa ${brl(an.patr-an.vrf,2)}  ·  Tesouro ${brl(an.vrf,2)}`
+    +`  ·  Reserva ${brl(resvPdf,2)}`
+    +((itPdf&&itPdf.brl)?`  ·  Internacional ${brl(itPdf.brl,2)}`:'')
+    +`  ·  Provisionado a receber ${brl(((prov&&prov.previstos)||[]).reduce((s,p)=>s+p.valor,0),2)}`,14,58);
+
+  // Tabela de ativos (com teto Bazin, RSI e sinal)
   const NOME_G={acao:'Ação',fii:'FII',etf:'ETF'};
-  const corpo=carteira.ativos_bolsa.map(a=>[a.ticker,NOME_G[a.tipo]||'',String(a.qtd),
-    num2(a.pm),num2(a._p),brl(a._v,2),pct((a._p-a.pm)/a.pm),pct(a._v/an.patr),pct(a.meta_pct,0)]);
-  for(const rf of carteira.renda_fixa)corpo.push([rf.nome,'Tesouro','—','—','—',brl(rf.valor,2),'—',pct(rf.valor/an.patr),pct(rf.meta_pct,0)]);
-  for(const r of(carteira.reserva||[]))corpo.push([r.nome,'Reserva','—','—','—',brl(r.valor,2),'—','—','—']);
-  doc.autoTable({startY:60,head:[['Ativo','Tipo','Qtd','PM','Atual','Posição','Var','% cart','Meta']],
-    body:corpo,styles:{fontSize:7.5,cellPadding:1.8},
-    headStyles:{fillColor:VERDE,textColor:255,fontSize:7.5},
+  const corpo=carteira.ativos_bolsa.map(a=>{
+    const sinal=(a._teto&&a._p<=a._teto)?(a._p<=a._teto*0.9?'COMPRA++':'compra'):'—';
+    return [a.ticker,NOME_G[a.tipo]||'',String(a.qtd),num2(a.pm),num2(a._p),brl(a._v,2),
+      pct((a._p-a.pm)/a.pm),pct(a._v/an.patr),pct(a.meta_pct,0),
+      a._teto?num2(a._teto):'—',a._rsi!=null?String(Math.round(a._rsi)):'—',sinal];
+  });
+  for(const rf of carteira.renda_fixa)corpo.push([rf.nome,'Tesouro','—','—','—',brl(rf.valor,2),'—',pct(rf.valor/an.patr),pct(rf.meta_pct,0),'—','—','—']);
+  for(const r of(carteira.reserva||[]))corpo.push([r.nome,'Reserva','—','—','—',brl(r.valor,2),'—','—','—','—','—','—']);
+  for(const a of((carteira.internacional&&carteira.internacional.ativos)||[]))
+    corpo.push([a.ticker+' (US$)','Intl',String(a.qtd??'—'),a.pm_usd?num2(a.pm_usd):'—',a._px?num2(a._px):'—',
+      'US$ '+num2(a._usd),(a._px&&a.pm_usd)?pct((a._px-a.pm_usd)/a.pm_usd):'—','—','—','—','—','—']);
+  doc.autoTable({startY:62,head:[['Ativo','Tipo','Qtd','PM','Atual','Posição','Var','% cart','Meta','Teto','RSI','Sinal']],
+    body:corpo,styles:{fontSize:6.8,cellPadding:1.5},
+    headStyles:{fillColor:VERDE,textColor:255,fontSize:6.8},
     alternateRowStyles:{fillColor:[241,247,244]},margin:{left:14,right:14}});
 
   // Renda mensal
@@ -1120,20 +1165,91 @@ async function exportarPDF(){
     y=doc.lastAutoTable.finalY+8;
   }
 
+  const secao=(titulo)=>{
+    if(y>250){doc.addPage();y=20}
+    doc.setTextColor(20,35,28);doc.setFontSize(11);doc.setFont(undefined,'bold');
+    doc.text(titulo,14,y);doc.setFont(undefined,'normal');
+  };
+
+  // Renda por ativo (yield on cost e ultima distribuicao por cota)
+  const porAtPdf={},ultPdf={},primPdf={};
+  for(const e of ev){
+    porAtPdf[e.ticker]=(porAtPdf[e.ticker]||0)+e.valor;
+    if(!ultPdf[e.ticker]||e.data>ultPdf[e.ticker].data)ultPdf[e.ticker]=e;
+    if(!primPdf[e.ticker]||e.data<primPdf[e.ticker])primPdf[e.ticker]=e.data;
+  }
+  const linhasRenda=Object.keys(porAtPdf).map(t=>{
+    const a=carteira.ativos_bolsa.find(x=>x.ticker===t);
+    const custoT=a?a.qtd*a.pm:0;
+    const meses=Math.max(1,(new Date()-new Date(primPdf[t]))/2629800000);
+    const ym=custoT>0?(porAtPdf[t]/meses)/custoT:0;
+    const u=ultPdf[t],pc=u&&(u.por_cota||(a&&a.qtd?u.valor/(u.cotas||a.qtd):null));
+    return [t,brl(porAtPdf[t],2),(ym*100).toFixed(2)+'%/mês',
+      pc?'R$ '+pc.toFixed(4):'—',
+      (pc&&a&&a._p)?pct(pc/a._p):'—',
+      u?u.data.split('-').reverse().join('/'):'—'];
+  }).sort((x,y2)=>parseFloat(y2[2])-parseFloat(x[2]));
+  if(linhasRenda.length){
+    secao('Renda por ativo');
+    doc.autoTable({startY:y+3,head:[['Ativo','Recebido total','Yield s/ custo','Última distrib.','% do preço','Data']],
+      body:linhasRenda,styles:{fontSize:7,cellPadding:1.5},
+      headStyles:{fillColor:MINT,textColor:255,fontSize:7},
+      alternateRowStyles:{fillColor:[241,247,244]},margin:{left:14,right:14}});
+    y=doc.lastAutoTable.finalY+8;
+  }
+
   // A receber
   const prevs=((prov&&prov.previstos)||[]).slice().sort((a,b)=>a.data.localeCompare(b.data));
   if(prevs.length){
-    doc.setFontSize(11);doc.setFont(undefined,'bold');
-    doc.text('Proventos a receber',14,y);doc.setFont(undefined,'normal');
-    doc.autoTable({startY:y+3,head:[['Data','Ativo','Valor']],
-      body:prevs.map(p=>[p.data.split('-').reverse().join('/'),p.ticker,brl(p.valor,2)]),
+    secao('Proventos a receber');
+    doc.autoTable({startY:y+3,head:[['Data','Ativo','Valor','% da posição']],
+      body:prevs.map(p=>{
+        const a=carteira.ativos_bolsa.find(x=>x.ticker===p.ticker);
+        const c=a?a.qtd*a.pm:0;
+        return [p.data.split('-').reverse().join('/'),p.ticker,brl(p.valor,2),c>0?pct(p.valor/c):'—'];
+      }),
       styles:{fontSize:7.5,cellPadding:1.8},headStyles:{fillColor:VERDE,textColor:255,fontSize:7.5},
       margin:{left:14,right:14}});
     y=doc.lastAutoTable.finalY+8;
   }
 
+  // Oportunidades e proximo aporte
+  if(an.op&&an.op.length){
+    secao('Zona de compra (preço abaixo do teto Bazin / sobrevenda)');
+    doc.autoTable({startY:y+3,head:[['Ativo','Preço','Sinais','Força']],
+      body:an.op.map(o=>[o.t,brl(o.preco,2),o.sin,o.forte?'SINAL FORTE':'—']),
+      styles:{fontSize:7.5,cellPadding:1.8},headStyles:{fillColor:MINT,textColor:255,fontSize:7.5},
+      margin:{left:14,right:14}});
+    y=doc.lastAutoTable.finalY+8;
+  }
+  if(an.reb&&an.reb.length){
+    secao('Próximo aporte sugerido (rebalanceamento)');
+    doc.autoTable({startY:y+3,head:[['Ordem','Ativo','Aportar','Atual','Meta']],
+      body:an.reb.map((r,i)=>[(i+1)+'º',r.t,brl(r.ap,2),pct(r.pc),pct(r.meta,0)]),
+      styles:{fontSize:7.5,cellPadding:1.8},headStyles:{fillColor:[30,64,175],textColor:255,fontSize:7.5},
+      margin:{left:14,right:14}});
+    y=doc.lastAutoTable.finalY+8;
+  }
+
+  // Evolucao do patrimonio (ultimos pontos)
+  if(hist&&hist.length>1){
+    secao('Evolução do patrimônio');
+    const pts=hist.slice(-8);
+    doc.autoTable({startY:y+3,
+      head:[pts.map(p=>p[0].slice(8,10)+'/'+p[0].slice(5,7))],
+      body:[pts.map(p=>brl(p[1],0))],
+      styles:{fontSize:7,cellPadding:1.5,halign:'center'},
+      headStyles:{fillColor:VERDE,textColor:255,fontSize:7},margin:{left:14,right:14}});
+    y=doc.lastAutoTable.finalY+8;
+  }
+
   doc.setTextColor(...CINZA);doc.setFontSize(7);
-  doc.text('Gerado pelo app Minha Carteira · Cotações com ~15 min de atraso · Não é recomendação de investimento.',14,287);
+  const paginas=doc.getNumberOfPages();
+  for(let i=1;i<=paginas;i++){
+    doc.setPage(i);doc.setTextColor(...CINZA);doc.setFontSize(7);
+    doc.text('Minha Carteira · Cotações com ~15 min de atraso · Não é recomendação de investimento.',14,290);
+    doc.text(`${i}/${paginas}`,W-14,290,{align:'right'});
+  }
 
   const nome=`carteira-${new Date().toISOString().slice(0,10)}.pdf`;
   const mobile=/Android|iPhone|iPad/i.test(navigator.userAgent);

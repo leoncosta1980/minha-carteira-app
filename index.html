@@ -151,7 +151,12 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div class="tab" id="tab-inicio">
   <div class="mgrid" id="metrics"></div>
   <div id="alerts"></div>
-  <div class="chart-box hide" id="hist-box"><div class="gt" style="margin:0 0 6px"><b>Evolução do patrimônio</b></div><canvas id="ch-hist" height="150"></canvas></div>
+  <div class="chart-box hide" id="hist-box">
+    <div class="gt" style="margin:0 0 6px"><b>Evolução do patrimônio</b></div>
+    <div id="bench-chips" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap"></div>
+    <canvas id="ch-hist" height="150"></canvas>
+    <div id="bench-info" class="cap" style="margin:6px 0 0"></div>
+  </div>
   <h2>Alocação: atual × meta</h2>
   <div id="aloc"></div>
   </div>
@@ -244,7 +249,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div class="chart-box" style="text-align:center;margin-top:16px">
     <img src="icone-192.png" style="width:52px;height:52px;border-radius:13px" alt="">
     <p style="font-weight:700;margin:8px 0 2px">Minha Carteira</p>
-    <p class="cap" style="margin:0">Versão 2.4.1 · julho de 2026</p>
+    <p class="cap" style="margin:0">Versão 2.5.0 · agosto de 2026</p>
     <p class="cap" style="margin:8px 0 0">Desenvolvido por <b>Leonardo de Oliveira da Costa</b></p>
     <p class="cap" style="margin:2px 0 0">Dados: brapi.dev · IA: Google Gemini · Hospedagem: GitHub Pages</p>
   </div>
@@ -824,15 +829,63 @@ function renderAloc(an){
   +'<div class="cap" style="margin:8px 0 0">Barra = alocação atual · traço = meta · <span style="color:#EF9F27">laranja</span> = abaixo da meta (prioridade de aporte) · <span style="color:#93C5FD">azul</span> = internacional (fora do rebalanceamento)</div></div>';
 }
 
+const BENCH={nenhum:{n:'Só carteira'},cdi:{n:'vs CDI',cor:'#93C5FD'},
+  ipca:{n:'vs IPCA',cor:'#FDBA74'},ibov:{n:'vs Ibovespa',cor:'#F0ABFC'}};
+function setBench(b){localStorage.setItem('mc_bench',b);if(lastAn)renderCharts(lastAn)}
+
+// Simula "quanto eu teria se cada aporte meu tivesse ido para o benchmark"
+function simularBench(tipo){
+  if(!hist||hist.length<2)return null;
+  const temAporte=hist.some(h=>h.aportado!=null);
+  if(!temAporte)return null;
+  const base=hist.find(h=>h.aportado!=null);
+  let saldo=base[1],apAnt=base.aportado,serie=[],ok=false;
+  for(let i=0;i<hist.length;i++){
+    const h=hist[i];
+    if(h.aportado==null){serie.push(null);continue}
+    let taxa=0;
+    if(tipo==='cdi'&&h.cdi!=null){taxa=h.cdi/100;ok=true}
+    else if(tipo==='ipca'&&h.ipca!=null){taxa=Math.pow(1+h.ipca/100,1/21)-1;ok=true}
+    else if(tipo==='ibov'&&h.ibov&&i>0&&hist[i-1].ibov){taxa=h.ibov/hist[i-1].ibov-1;ok=true}
+    const aporte=Math.max(0,h.aportado-apAnt);
+    saldo=saldo*(1+taxa)+aporte;apAnt=h.aportado;
+    serie.push(+saldo.toFixed(2));
+  }
+  return ok?serie:null;
+}
+
 function renderCharts(an){
   renderAloc(an);
   if(typeof Chart==='undefined')return;
-  if(hist&&hist.length>1){
-    $('hist-box').classList.remove('hide');
-    if(charts.hist)charts.hist.destroy();
-    charts.hist=new Chart($('ch-hist'),{type:'line',data:{labels:hist.map(x=>`${x[0].slice(8,10)}/${x[0].slice(5,7)}`),datasets:[{data:hist.map(x=>x[1]),borderColor:'#4ADE80',backgroundColor:'rgba(74,222,128,.12)',fill:true,tension:.25,pointRadius:0}]},
-      options:{responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#8FA89C',maxTicksLimit:6},grid:{display:false}},y:{ticks:{color:'#8FA89C'},grid:{color:'#24352E'}}}}});
-  }
+  if(!(hist&&hist.length>1))return;
+  $('hist-box').classList.remove('hide');
+  const bsel=localStorage.getItem('mc_bench')||'nenhum';
+  const temDados=hist.some(h=>h.aportado!=null&&(h.cdi!=null||h.ibov!=null));
+  $('bench-chips').innerHTML=Object.entries(BENCH)
+    .filter(([k])=>k==='nenhum'||temDados)
+    .map(([k,v])=>`<button class="pchip${k===bsel?' on':''}" onclick="setBench('${k}')">${v.n}</button>`).join('');
+
+  const ds=[{label:'Carteira',data:hist.map(x=>x[1]),borderColor:'#4ADE80',
+    backgroundColor:'rgba(74,222,128,.12)',fill:true,tension:.25,pointRadius:0}];
+  let info='';
+  if(bsel!=='nenhum'){
+    const sim=simularBench(bsel);
+    if(sim){
+      ds.push({label:BENCH[bsel].n,data:sim,borderColor:BENCH[bsel].cor,borderDash:[5,4],
+        fill:false,tension:.25,pointRadius:0,borderWidth:1.6});
+      const fim=sim.filter(v=>v!=null).pop(),meu=hist[hist.length-1][1],dif=meu-fim;
+      info=`No período, sua carteira está <b class="${dif>=0?'pos':'neg'}">${dif>=0?'+':''}${brl(dif,2)}</b> `
+        +`em relação aos mesmos aportes no ${BENCH[bsel].n.replace('vs ','')}.`;
+    }else info='Comparação disponível a partir dos próximos registros do agente.';
+  }else if(temDados)info='Escolha um índice para comparar seus aportes com o benchmark.';
+  $('bench-info').innerHTML=info;
+
+  if(charts.hist)charts.hist.destroy();
+  charts.hist=new Chart($('ch-hist'),{type:'line',
+    data:{labels:hist.map(x=>`${x[0].slice(8,10)}/${x[0].slice(5,7)}`),datasets:ds},
+    options:{responsive:true,plugins:{legend:{display:ds.length>1,labels:{color:'#8FA89C',boxWidth:12,font:{size:10}}}},
+      scales:{x:{ticks:{color:'#8FA89C',maxTicksLimit:6},grid:{display:false}},
+        y:{ticks:{color:'#8FA89C'},grid:{color:'#24352E'}}}}});
 }
 
 function renderNews(){
@@ -1067,7 +1120,16 @@ async function refresh(force){
     carteira=jsonSeguro(cj.text,'carteira.json');
     if(!carteira)throw new Error('carteira.json inválido');
     const hc=await ghGet('historico.csv');
-    hist=hc?hc.text.trim().split('\n').slice(1).map(l=>{const[a,b]=l.split(',');return[a,parseFloat(b)]}):null;
+    if(hc){
+      const ls=hc.text.trim().split('\n').filter(l=>l.trim()&&!l.startsWith('data,'));
+      hist=ls.map(l=>{const p=l.split(',');
+        const o=[p[0],parseFloat(p[1])];
+        o.aportado=p[2]?parseFloat(p[2]):null;
+        o.cdi=p[3]?parseFloat(p[3]):null;
+        o.ipca=p[4]?parseFloat(p[4]):null;
+        o.ibov=p[5]?parseFloat(p[5]):null;
+        return o;});
+    }else hist=null;
     const nj=await ghGet('noticias.json');
     noticias=nj?jsonSeguro(nj.text,'noticias.json'):null;
     const ij=await ghGet('indicadores.json');

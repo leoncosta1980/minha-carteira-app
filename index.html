@@ -249,7 +249,7 @@ label{font-size:.78rem;color:var(--mut);display:block;margin:10px 0 4px}
   <div class="chart-box" style="text-align:center;margin-top:16px">
     <img src="icone-192.png" style="width:52px;height:52px;border-radius:13px" alt="">
     <p style="font-weight:700;margin:8px 0 2px">Minha Carteira</p>
-    <p class="cap" style="margin:0">Versão 2.5.0 · agosto de 2026</p>
+    <p class="cap" style="margin:0">Versão 2.5.1 · agosto de 2026</p>
     <p class="cap" style="margin:8px 0 0">Desenvolvido por <b>Leonardo de Oliveira da Costa</b></p>
     <p class="cap" style="margin:2px 0 0">Dados: brapi.dev · IA: Google Gemini · Hospedagem: GitHub Pages</p>
   </div>
@@ -844,8 +844,9 @@ function simularBench(tipo){
     const h=hist[i];
     if(h.aportado==null){serie.push(null);continue}
     let taxa=0;
+    // cdi/ipca ja vem como taxa do periodo da linha (dia ou mes)
     if(tipo==='cdi'&&h.cdi!=null){taxa=h.cdi/100;ok=true}
-    else if(tipo==='ipca'&&h.ipca!=null){taxa=Math.pow(1+h.ipca/100,1/21)-1;ok=true}
+    else if(tipo==='ipca'&&h.ipca!=null){taxa=h.ipca/100;ok=true}
     else if(tipo==='ibov'&&h.ibov&&i>0&&hist[i-1].ibov){taxa=h.ibov/hist[i-1].ibov-1;ok=true}
     const aporte=Math.max(0,h.aportado-apAnt);
     saldo=saldo*(1+taxa)+aporte;apAnt=h.aportado;
@@ -860,9 +861,10 @@ function renderCharts(an){
   if(!(hist&&hist.length>1))return;
   $('hist-box').classList.remove('hide');
   const bsel=localStorage.getItem('mc_bench')||'nenhum';
-  const temDados=hist.some(h=>h.aportado!=null&&(h.cdi!=null||h.ibov!=null));
-  $('bench-chips').innerHTML=Object.entries(BENCH)
-    .filter(([k])=>k==='nenhum'||temDados)
+  const temAp=hist.some(h=>h.aportado!=null);
+  const disp={nenhum:true,cdi:temAp&&hist.some(h=>h.cdi!=null),
+    ipca:temAp&&hist.some(h=>h.ipca!=null),ibov:temAp&&hist.some(h=>h.ibov!=null)};
+  $('bench-chips').innerHTML=Object.entries(BENCH).filter(([k])=>disp[k])
     .map(([k,v])=>`<button class="pchip${k===bsel?' on':''}" onclick="setBench('${k}')">${v.n}</button>`).join('');
 
   const ds=[{label:'Carteira',data:hist.map(x=>x[1]),borderColor:'#4ADE80',
@@ -877,7 +879,7 @@ function renderCharts(an){
       info=`No período, sua carteira está <b class="${dif>=0?'pos':'neg'}">${dif>=0?'+':''}${brl(dif,2)}</b> `
         +`em relação aos mesmos aportes no ${BENCH[bsel].n.replace('vs ','')}.`;
     }else info='Comparação disponível a partir dos próximos registros do agente.';
-  }else if(temDados)info='Escolha um índice para comparar seus aportes com o benchmark.';
+  }else if(disp.cdi||disp.ipca||disp.ibov)info='Escolha um índice: a linha tracejada mostra quanto você teria com <b>os mesmos aportes</b> aplicados nele.';
   $('bench-info').innerHTML=info;
 
   if(charts.hist)charts.hist.destroy();
